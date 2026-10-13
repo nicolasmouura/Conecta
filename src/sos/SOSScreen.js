@@ -20,6 +20,7 @@ import {
   observarSOSAtivos,
 } from '../dados/sos';
 import { coordenadaValida } from '../dados/buscarFamiliares';
+import { enviarSOSPorSMS } from '../dados/smsSOS';
 
 import { useEspacoTopo } from '../navegacao/BotaoMenu';
 import { cores, fontes, raio, sombra } from '../theme/theme';
@@ -86,14 +87,39 @@ function CartaoSOS({ alerta, meu }) {
   );
 }
 
+// "Avisar por SMS": funciona sem internet (abre o app de mensagens).
+function BotaoSMS({ onPress, abrindo }) {
+  return (
+    <View style={styles.sms}>
+      <TouchableOpacity
+        style={[styles.botaoSMS, abrindo && styles.desabilitado]}
+        onPress={onPress}
+        disabled={abrindo}
+        accessibilityRole="button"
+      >
+        <Feather name="message-square" size={18} color={cores.erro} />
+        <Text style={styles.botaoSMSTexto}>
+          {abrindo ? 'Abrindo mensagens...' : 'Avisar por SMS'}
+        </Text>
+      </TouchableOpacity>
+
+      <Text style={styles.dicaSMS}>
+        Funciona sem internet: abre o app de mensagens com sua localização e os
+        telefones da família. Se faltar algum contato, escolha no próprio app.
+      </Text>
+    </View>
+  );
+}
+
 // Tela de emergência: acionar e acompanhar SOS. Encerrar o próprio SOS
 // só em Perfil → Configurações → Segurança (sos/EncerrarSOS.js).
-export default function SOSScreen({ usuario, grupoId }) {
+export default function SOSScreen({ usuario, grupoId, posicaoAtual, posicaoEm }) {
   // Título abaixo do "‹ Menu" (que acompanha a área segura).
   const espacoTopo = useEspacoTopo(100);
   const [alertas, setAlertas] = useState(null);
   const [erro, setErro] = useState('');
   const [enviando, setEnviando] = useState(false);
+  const [abrindoSMS, setAbrindoSMS] = useState(false);
 
   useEffect(() => {
     if (!grupoId) return;
@@ -104,12 +130,39 @@ export default function SOSScreen({ usuario, grupoId }) {
     });
   }, [grupoId]);
 
+  async function avisarPorSMS() {
+    try {
+      setAbrindoSMS(true);
+
+      const { resultado } = await enviarSOSPorSMS({
+        uid: usuario.uid,
+        grupoId,
+        nome: usuario.nome,
+        posicao: posicaoAtual,
+        posicaoEm,
+      });
+
+      if (resultado === 'indisponivel') {
+        Alert.alert('SMS indisponível', 'Este aparelho não consegue enviar SMS.');
+      }
+    } catch (e) {
+      console.error('Erro ao abrir o SMS:', e);
+      Alert.alert('Não foi possível abrir as mensagens', 'Tente novamente.');
+    } finally {
+      setAbrindoSMS(false);
+    }
+  }
+
+  const opcaoSMS = { text: 'Avisar por SMS', onPress: avisarPorSMS };
+
   if (!grupoId) {
     return (
       <View style={[styles.container, styles.centro]}>
         <Text style={styles.mensagem}>
           Entre em uma família para usar o SOS.
         </Text>
+
+        <BotaoSMS onPress={avisarPorSMS} abrindo={abrindoSMS} />
       </View>
     );
   }
@@ -133,14 +186,16 @@ export default function SOSScreen({ usuario, grupoId }) {
           'SOS acionado',
           resultado.comLocalizacao
             ? 'Sua família foi avisada com sua última localização.'
-            : 'Sua família foi avisada. Não havia localização disponível.'
+            : 'Sua família foi avisada. Não havia localização disponível.',
+          [{ text: 'OK' }, opcaoSMS]
         );
       }
     } catch (e) {
       console.error('Erro ao acionar SOS:', e);
       Alert.alert(
         'Não foi possível acionar o SOS',
-        'Verifique sua conexão e tente novamente.'
+        'Verifique sua conexão e tente novamente, ou avise sua família por SMS.',
+        [{ text: 'OK' }, opcaoSMS]
       );
     } finally {
       setEnviando(false);
@@ -190,6 +245,8 @@ export default function SOSScreen({ usuario, grupoId }) {
               <Text style={styles.botaoSOSDica}>Será pedida uma confirmação</Text>
             </TouchableOpacity>
           )}
+
+          <BotaoSMS onPress={avisarPorSMS} abrindo={abrindoSMS} />
 
           <Text style={styles.secao}>SOS ativos da família</Text>
 
@@ -339,6 +396,37 @@ const styles = StyleSheet.create({
 
   mapa: {
     flex: 1,
+  },
+
+  sms: {
+    alignSelf: 'stretch',
+    marginTop: 16,
+    gap: 8,
+  },
+
+  botaoSMS: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 13,
+    borderRadius: raio.pilula,
+    borderWidth: 1.5,
+    borderColor: cores.erro,
+    backgroundColor: cores.superficie,
+  },
+
+  botaoSMSTexto: {
+    fontSize: 15,
+    fontFamily: fontes.destaque,
+    color: cores.erro,
+  },
+
+  dicaSMS: {
+    fontSize: 12,
+    lineHeight: 17,
+    color: cores.textoSecundario,
+    textAlign: 'center',
   },
 
   dicaEncerrar: {

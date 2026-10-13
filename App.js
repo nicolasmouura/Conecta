@@ -433,6 +433,8 @@ export default function App() {
       <SOSScreen
         usuario={perfil}
         grupoId={temGrupo ? grupoId : null}
+        posicaoAtual={localizacao.coordenadas}
+        posicaoEm={localizacao.atualizadoEm}
       />
     );
   } else if (tela === 'historico') {

@@ -56,3 +56,8 @@ jest.mock('@expo/vector-icons', () => {
 
   return { Feather: Icone };
 });
+
+// Área segura (notch/barra de status): simulação oficial da biblioteca.
+jest.mock('react-native-safe-area-context', () =>
+  require('react-native-safe-area-context/jest/mock').default
+);
