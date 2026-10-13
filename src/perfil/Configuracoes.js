@@ -26,6 +26,7 @@ import {
 } from '../dados/notificacoes';
 import EditarInformacoes from './EditarInformacoes';
 import MeusLugares from '../lugares/MeusLugares';
+import BotaoVoltar from '../navegacao/BotaoVoltar';
 import { cores, fontes } from '../theme/theme';
 
 const ITENS = [
@@ -241,20 +242,10 @@ export default function Configuracoes({
   if (segurancaAberta) {
     return (
       <View style={styles.container}>
-        <TouchableOpacity
-          style={styles.voltar}
+        <BotaoVoltar
+          label="Configurações"
           onPress={() => setSegurancaAberta(false)}
-        >
-          <Feather
-            name="arrow-left"
-            size={20}
-            color={cores.texto}
-          />
-
-          <Text style={styles.voltarTexto}>
-            Configurações
-          </Text>
-        </TouchableOpacity>
+        />
 
         <Text style={styles.title}>
           Segurança
@@ -316,20 +307,10 @@ export default function Configuracoes({
   if (notificacoesAbertas) {
     return (
       <View style={styles.container}>
-        <TouchableOpacity
-          style={styles.voltar}
+        <BotaoVoltar
+          label="Configurações"
           onPress={voltarConfiguracoes}
-        >
-          <Feather
-            name="arrow-left"
-            size={20}
-            color={cores.texto}
-          />
-
-          <Text style={styles.voltarTexto}>
-            Configurações
-          </Text>
-        </TouchableOpacity>
+        />
 
         <Text style={styles.title}>
           Notificações
@@ -523,19 +504,6 @@ const styles = StyleSheet.create({
   textoSair: {
     fontSize: 16,
     color: cores.erro,
-    fontFamily: fontes.destaque,
-  },
-
-  voltar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 20,
-  },
-
-  voltarTexto: {
-    fontSize: 15,
-    color: cores.textoSecundario,
     fontFamily: fontes.destaque,
   },
 

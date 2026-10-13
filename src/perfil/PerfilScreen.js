@@ -36,6 +36,7 @@ export default function PerfilScreen({
   onSair,
   onPerfilAtualizado,
   posicaoAtual,
+  onTelaCheia,
 }) {
   const [abrirCamera, setAbrirCamera] = useState(false);
   const [salvandoFoto, setSalvandoFoto] = useState(false);
@@ -43,6 +44,13 @@ export default function PerfilScreen({
   // Dados pessoais vindos de usuarios/{uid}
   const [dadosPerfil, setDadosPerfil] = useState(null);
   const [erroPerfil, setErroPerfil] = useState('');
+
+  // Câmera aberta: o App esconde o "‹ Menu" (a câmera tem o próprio "x").
+  useEffect(() => {
+    onTelaCheia?.(abrirCamera);
+
+    return () => onTelaCheia?.(false);
+  }, [abrirCamera, onTelaCheia]);
 
   useEffect(() => {
     let ativo = true;

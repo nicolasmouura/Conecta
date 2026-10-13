@@ -248,8 +248,13 @@ export default function EditarLugar({
 
   const nome = tipo.nome.toLowerCase();
 
+  // Voltar do Android: não fecha enquanto salva/busca (como o "x").
   return (
-    <Modal visible animationType="slide" onRequestClose={onFechar}>
+    <Modal
+      visible
+      animationType="slide"
+      onRequestClose={() => !ocupado && onFechar()}
+    >
       <KeyboardAvoidingView
         style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}

@@ -10,6 +10,7 @@ import {
 import { Feather } from '@expo/vector-icons';
 
 import EditarLugar from './EditarLugar';
+import BotaoVoltar from '../navegacao/BotaoVoltar';
 import { buscarLugares, salvarLugar, TIPOS_LUGAR } from '../dados/lugares';
 import { cores, fontes, raio } from '../theme/theme';
 
@@ -46,10 +47,7 @@ export default function MeusLugares({ usuario, posicaoAtual, onCasaSalva, onVolt
 
   return (
     <View style={styles.container}>
-      <TouchableOpacity style={styles.voltar} onPress={onVoltar}>
-        <Feather name="arrow-left" size={20} color={cores.texto} />
-        <Text style={styles.voltarTexto}>Configurações</Text>
-      </TouchableOpacity>
+      <BotaoVoltar label="Configurações" onPress={onVoltar} />
 
       <Text style={styles.titulo}>Meus lugares</Text>
       <Text style={styles.subtitulo}>
@@ -119,19 +117,6 @@ const styles = StyleSheet.create({
   container: {
     width: '90%',
     marginTop: 30,
-  },
-
-  voltar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 20,
-  },
-
-  voltarTexto: {
-    fontSize: 15,
-    color: cores.textoSecundario,
-    fontFamily: fontes.destaque,
   },
 
   titulo: {

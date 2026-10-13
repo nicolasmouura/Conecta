@@ -42,6 +42,7 @@ import { garantirEntradaDiretorio } from './src/dados/salvarUsuario';
 import GrupoScreen from './src/grupo/GrupoScreen';
 import { useCompartilharLocalizacao } from './src/mapa/compartilharLocalizacao';
 import { useNotificacoes } from './src/notificacoes/useNotificacoes';
+import { useVoltarAndroid } from './src/navegacao/voltar';
 
 import {
   cores,
@@ -77,6 +78,10 @@ export default function App() {
   const [pulouGrupo, setPulouGrupo] = useState(false);
   const [verificandoGrupo, setVerificandoGrupo] = useState(false);
   const [tela, setTela] = useState('menu');
+
+  // Subtela que ocupa a tela inteira (câmera do perfil): esconde o
+  // "‹ Menu", que ficaria por cima do botão de fechar dela.
+  const [telaCheia, setTelaCheia] = useState(false);
 
   useEffect(() => {
     async function verificarGrupo() {
@@ -228,6 +233,14 @@ export default function App() {
 
   // Avisos no aparelho (Configurações → Notificações).
   useNotificacoes(perfil, temGrupo ? grupoId : null);
+
+  // Voltar do Android nas telas abertas pelo Menu: volta ao Menu, como
+  // o "‹ Menu". As subtelas registram o próprio voltar ao abrir e têm
+  // prioridade. No Menu, o voltar segue o padrão do Android.
+  useVoltarAndroid(
+    Boolean(usuario) && !bloqueado && !usuarioPendente && tela !== 'menu',
+    () => setTela('menu')
+  );
 
   if (!fontsLoaded) {
     return null;
@@ -412,6 +425,7 @@ export default function App() {
       <PerfilScreen
         usuario={perfil}
         posicaoAtual={localizacao.coordenadas}
+        onTelaCheia={setTelaCheia}
         onSair={sairDoAplicativo}
         onPerfilAtualizado={({ nome }) =>
           setPerfil((atual) => ({
@@ -452,7 +466,7 @@ export default function App() {
       <View style={styles.container}>
         {conteudo}
 
-        {tela !== 'menu' && (
+        {tela !== 'menu' && !telaCheia && (
             <TouchableOpacity
               style={
                 styles.voltarButton
@@ -460,6 +474,9 @@ export default function App() {
               onPress={
                 voltarMenu
               }
+              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+              accessibilityRole="button"
+              accessibilityLabel="Voltar ao menu"
             >
               <Text
                 style={

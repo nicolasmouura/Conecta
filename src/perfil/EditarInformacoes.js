@@ -9,6 +9,7 @@ import {
 import { Feather } from '@expo/vector-icons';
 
 import EditarLugar from '../lugares/EditarLugar';
+import BotaoVoltar from '../navegacao/BotaoVoltar';
 import { observarLugar, salvarLugar, TIPOS_LUGAR } from '../dados/lugares';
 import {
   cpfValido,
@@ -131,10 +132,7 @@ export default function EditarInformacoes({
 
   return (
     <View style={styles.container}>
-      <TouchableOpacity style={styles.voltar} onPress={onVoltar} disabled={salvando}>
-        <Feather name="arrow-left" size={20} color={cores.texto} />
-        <Text style={styles.voltarTexto}>Configurações</Text>
-      </TouchableOpacity>
+      <BotaoVoltar label="Configurações" onPress={onVoltar} desabilitado={salvando} />
 
       <Text style={styles.titulo}>Dados pessoais</Text>
 
@@ -237,19 +235,6 @@ const styles = StyleSheet.create({
   container: {
     width: '90%',
     marginTop: 30,
-  },
-
-  voltar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 20,
-  },
-
-  voltarTexto: {
-    fontSize: 15,
-    color: cores.textoSecundario,
-    fontFamily: fontes.destaque,
   },
 
   titulo: {

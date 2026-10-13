@@ -24,6 +24,7 @@ import {
   validarCadastro,
 } from '../dados/salvarUsuario';
 import { zerarFalhas } from '../dados/biometria';
+import { useVoltarAndroid } from '../navegacao/voltar';
 import { cores, fontes, raio } from '../theme/theme';
 
 /*
@@ -48,6 +49,11 @@ export default function AutenticacaoScreen({ onAutenticado, aviso }) {
 
   const [erro, setErro] = useState(aviso || '');
   const [carregando, setCarregando] = useState(false);
+
+  // Voltar do Android no login/cadastro: igual ao "← Voltar".
+  useVoltarAndroid(tela !== 'inicio', () => {
+    if (!carregando) voltarInicio();
+  });
 
   async function continuar() {
     setErro('');

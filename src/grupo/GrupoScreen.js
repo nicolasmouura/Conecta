@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 
 import { criarGrupo } from '../dados/grupo';
+import { useVoltarAndroid } from '../navegacao/voltar';
 import { mensagemDeErro } from '../dados/convites';
 import ConvitesRecebidos from '../familia/ConvitesRecebidos';
 import { cores, fontes, raio } from '../theme/theme';
@@ -27,6 +28,13 @@ export default function GrupoScreen({
   const [carregando, setCarregando] = useState(false);
 
   const [grupoCriado, setGrupoCriado] = useState(null);
+
+  // Voltar do Android em "Criar família": igual ao botão "Voltar".
+  useVoltarAndroid(criando && !grupoCriado, () => {
+    if (carregando) return;
+    setCriando(false);
+    setErro('');
+  });
 
   // =====================================================
   // GRUPO CRIADO

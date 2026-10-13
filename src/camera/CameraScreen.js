@@ -6,6 +6,7 @@ import { Feather } from '@expo/vector-icons';
 
 import CameraControls from './CameraControls';
 import PreviewModal from './PreviewModal';
+import { useVoltarAndroid } from '../navegacao/voltar';
 import { cores, fontes, raio } from '../theme/theme';
 
 export default function CameraScreen({ onPhotoTaken, onCancel }) {
@@ -15,6 +16,12 @@ export default function CameraScreen({ onPhotoTaken, onCancel }) {
   const [capturedImage, setCapturedImage] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [isTakingPicture, setIsTakingPicture] = useState(false);
+
+  // Voltar do Android: igual ao "x" (a prévia é um Modal e trata o
+  // próprio voltar). Não fecha durante a captura.
+  useVoltarAndroid(Boolean(onCancel), () => {
+    if (!isTakingPicture) closeCamera();
+  });
 
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
 
