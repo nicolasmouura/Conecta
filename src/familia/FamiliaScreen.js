@@ -21,6 +21,7 @@ import {
 import { observarConvitesPendentesDoGrupo } from '../dados/convites';
 import { buscarPerfisDosMembros } from '../dados/salvarUsuario';
 
+import { useEspacoTopo } from '../navegacao/BotaoMenu';
 import { cores, fontes, raio } from '../theme/theme';
 
 export default function FamiliaScreen({
@@ -28,6 +29,8 @@ export default function FamiliaScreen({
   usuario,
   onGrupoConcluido,
 }) {
+  // Título abaixo do "‹ Menu" (que acompanha a área segura).
+  const espacoTopo = useEspacoTopo(60);
   const [grupoInfo, setGrupoInfo] = useState(null);
   const [membros, setMembros] = useState([]);
   const [convitesPendentes, setConvitesPendentes] = useState([]);
@@ -167,7 +170,7 @@ export default function FamiliaScreen({
   ];
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: espacoTopo }]}>
       <Text style={styles.title}>
         Minha Família
       </Text>

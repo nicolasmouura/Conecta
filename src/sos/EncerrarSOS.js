@@ -15,7 +15,13 @@ import {
   reauthenticateWithCredential,
 } from '../armazenamento/contasLocais';
 import { auth } from '../config/armazenamento';
-import { autenticarComBiometria, biometriaDisponivel } from '../dados/biometria';
+import {
+  autenticarComBiometria,
+  biometriaDisponivel,
+  MAXIMO_FALHAS,
+  registrarFalhaSenhaSOS,
+  zerarFalhasSenhaSOS,
+} from '../dados/biometria';
 import { encerrarSOS, horarioDoAlerta, observarMeuSOS } from '../dados/sos';
 import { cores, fontes, raio } from '../theme/theme';
 
@@ -24,8 +30,10 @@ import { cores, fontes, raio } from '../theme/theme';
  * SOS é encerrado. Pede a biometria do aparelho; se ela falhar, for
  * cancelada ou não existir, pede a senha da conta. A senha só é
  * conferida (reauthenticateWithCredential) e nunca é guardada.
+ * Depois de MAXIMO_FALHAS senhas erradas a sessão é encerrada (onSair);
+ * o SOS continua ativo.
  */
-export default function EncerrarSOS({ usuario, grupoId }) {
+export default function EncerrarSOS({ usuario, grupoId, onSair }) {
   // undefined = carregando, null = nenhum SOS ativo
   const [alerta, setAlerta] = useState(undefined);
   const [pedirSenha, setPedirSenha] = useState(false);
@@ -39,15 +47,6 @@ export default function EncerrarSOS({ usuario, grupoId }) {
       setAlerta(null);
     });
   }, [grupoId, usuario?.uid]);
-
-  // SOS encerrado (aqui ou em outra sessão): limpa o formulário.
-  useEffect(() => {
-    if (alerta) return;
-
-    setPedirSenha(false);
-    setSenha('');
-    setMensagem('');
-  }, [alerta]);
 
   if (!grupoId || alerta === null) {
     return (
@@ -64,6 +63,12 @@ export default function EncerrarSOS({ usuario, grupoId }) {
 
   async function encerrar() {
     await encerrarSOS(alerta.id);
+    await zerarFalhasSenhaSOS(usuario.uid).catch(() => {});
+
+    // Limpa o formulário para um próximo SOS.
+    setPedirSenha(false);
+    setSenha('');
+    setMensagem('');
     Alert.alert('SOS encerrado', 'O alerta deixou de aparecer para sua família.');
   }
 
@@ -112,11 +117,25 @@ export default function EncerrarSOS({ usuario, grupoId }) {
     } catch (e) {
       setOcupado(false);
       setSenha('');
-      setMensagem(
-        e.code === 'auth/invalid-credential'
-          ? 'Senha incorreta.'
-          : 'Não foi possível confirmar a senha. Tente novamente.'
-      );
+
+      if (e.code !== 'auth/invalid-credential') {
+        setMensagem('Não foi possível confirmar a senha. Tente novamente.');
+        return;
+      }
+
+      const falhas = await registrarFalhaSenhaSOS(usuario.uid).catch(() => 1);
+
+      if (falhas >= MAXIMO_FALHAS) {
+        await zerarFalhasSenhaSOS(usuario.uid).catch(() => {});
+        Alert.alert(
+          'Muitas tentativas',
+          `A senha foi digitada errada ${MAXIMO_FALHAS} vezes. Por segurança, sua sessão foi encerrada. O SOS continua ativo.`
+        );
+        onSair?.();
+        return;
+      }
+
+      setMensagem(`Senha incorreta (tentativa ${falhas} de ${MAXIMO_FALHAS}).`);
       return;
     }
 

@@ -148,6 +148,7 @@ export default function Configuracoes({
         <EncerrarSOS
           usuario={usuario}
           grupoId={grupoId}
+          onSair={onSair}
         />
 
         <Text style={styles.secao}>
@@ -197,7 +198,7 @@ export default function Configuracoes({
             )}
 
             <Text style={styles.aviso}>
-              Ao tocar em "Sair do aplicativo", a próxima
+              Ao tocar em “Sair do aplicativo”, a próxima
               entrada pede e-mail, senha e reconhecimento
               facial.
             </Text>

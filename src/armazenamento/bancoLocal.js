@@ -188,7 +188,7 @@ function carregar() {
 
         try {
           documentos.set(chave.slice(PREFIXO.length), deTexto(texto));
-        } catch (erro) {
+        } catch {
           console.log('Documento local ilegível ignorado:', chave);
         }
       }

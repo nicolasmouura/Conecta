@@ -15,8 +15,12 @@ import { BackHandler } from 'react-native';
  * No iOS não há botão voltar: o hook não faz nada.
  */
 export function useVoltarAndroid(ativo, onVoltar) {
+  // Sempre a versão mais recente de onVoltar, sem registrar de novo.
   const onVoltarRef = useRef(onVoltar);
-  onVoltarRef.current = onVoltar;
+
+  useEffect(() => {
+    onVoltarRef.current = onVoltar;
+  });
 
   useEffect(() => {
     if (!ativo) return undefined;

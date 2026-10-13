@@ -21,6 +21,7 @@ import {
   PERIODOS,
 } from '../dados/historico';
 
+import { useEspacoTopo } from '../navegacao/BotaoMenu';
 import { cores, fontes, raio, sombra } from '../theme/theme';
 
 // Acima disso, só início e fim ganham marcador (a rota continua completa).
@@ -30,6 +31,8 @@ const MARGEM_ENQUADRAMENTO = { top: 60, right: 50, bottom: 60, left: 50 };
 
 // Histórico de localizações: escolher membro → período → rota no mapa.
 export default function HistoricoScreen({ usuario, grupoId }) {
+  // Título abaixo do "‹ Menu" (que acompanha a área segura).
+  const espacoTopo = useEspacoTopo(100);
   const [membros, setMembros] = useState([]);
   const [selecionado, setSelecionado] = useState(usuario?.uid);
   const [periodo, setPeriodo] = useState('hoje');
@@ -205,7 +208,7 @@ export default function HistoricoScreen({ usuario, grupoId }) {
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: espacoTopo }]}>
       <Text style={styles.titulo}>Histórico</Text>
       <Text style={styles.subtitulo}>Por onde sua família passou.</Text>
 

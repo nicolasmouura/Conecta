@@ -54,7 +54,7 @@ export default function GrupoScreen({
 
         <Text style={styles.instrucao}>
           Agora você pode convidar sua família pela
-          tela "Minha Família", usando o e-mail de
+          tela “Minha Família”, usando o e-mail de
           cada pessoa.
         </Text>
 

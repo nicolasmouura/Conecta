@@ -26,7 +26,7 @@ export default function TelaMapa({ usuario, grupoId, localizacao }) {
   const [membros, setMembros] = useState(null);
   const [localizacoes, setLocalizacoes] = useState(null);
   const [erro, setErro] = useState('');
-  const [agora, setAgora] = useState(Date.now());
+  const [agora, setAgora] = useState(() => Date.now());
 
   // Fotos (usuarios/{uid}.foto) dos membros, lidas uma vez por membro.
   const [perfis, setPerfis] = useState({});

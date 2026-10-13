@@ -69,6 +69,26 @@ export async function zerarFalhas(uid) {
 }
 
 /*
+ * Senha errada ao encerrar o SOS (Segurança): mesmo limite do login.
+ * Ao atingir MAXIMO_FALHAS a sessão é encerrada (o SOS continua
+ * ativo). Fica no aparelho: sair da tela não zera o contador.
+ */
+const chaveFalhasSenhaSOS = (uid) => `conecta.sos.senha.falhas.${uid}`;
+
+export async function registrarFalhaSenhaSOS(uid) {
+  const atual = Number.parseInt(await SecureStore.getItemAsync(chaveFalhasSenhaSOS(uid)), 10);
+  const total = (Number.isInteger(atual) && atual > 0 ? atual : 0) + 1;
+
+  await SecureStore.setItemAsync(chaveFalhasSenhaSOS(uid), String(total));
+
+  return total;
+}
+
+export async function zerarFalhasSenhaSOS(uid) {
+  await SecureStore.deleteItemAsync(chaveFalhasSenhaSOS(uid));
+}
+
+/*
  * Resultado de authenticateAsync →
  *   sucesso | falha | cancelado | bloqueado | indisponivel
  *   | nao_configurado

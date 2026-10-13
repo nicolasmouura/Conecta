@@ -8,7 +8,6 @@ import {
   AppState,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from 'react-native';
 
@@ -42,12 +41,9 @@ import { garantirEntradaDiretorio } from './src/dados/salvarUsuario';
 import GrupoScreen from './src/grupo/GrupoScreen';
 import { useCompartilharLocalizacao } from './src/mapa/compartilharLocalizacao';
 import { useVoltarAndroid } from './src/navegacao/voltar';
+import BotaoMenu from './src/navegacao/BotaoMenu';
 
-import {
-  cores,
-  fontes,
-  raio,
-} from './src/theme/theme';
+import { cores } from './src/theme/theme';
 
 // Tempo fora do app a partir do qual a biometria é pedida de novo.
 // A folga evita pedir após diálogos rápidos do sistema (ex.: permissão
@@ -464,26 +460,8 @@ export default function App() {
         {conteudo}
 
         {tela !== 'menu' && !telaCheia && (
-            <TouchableOpacity
-              style={
-                styles.voltarButton
-              }
-              onPress={
-                voltarMenu
-              }
-              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-              accessibilityRole="button"
-              accessibilityLabel="Voltar ao menu"
-            >
-              <Text
-                style={
-                  styles.voltarText
-                }
-              >
-                ‹ Menu
-              </Text>
-            </TouchableOpacity>
-          )}
+          <BotaoMenu onPress={voltarMenu} />
+        )}
 
         <StatusBar style="auto" />
       </View>
@@ -507,23 +485,5 @@ const styles = StyleSheet.create({
   carregandoTexto: {
     fontSize: 16,
     color: cores.textoSecundario,
-  },
-
-  voltarButton: {
-    position: 'absolute',
-    top: 50,
-    left: 16,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: raio.pilula,
-    backgroundColor:
-      'rgba(31, 42, 46, 0.75)',
-    zIndex: 20,
-  },
-
-  voltarText: {
-    color: '#fff',
-    fontFamily: fontes.destaque,
-    fontSize: 14,
   },
 });

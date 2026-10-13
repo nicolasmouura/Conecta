@@ -17,6 +17,7 @@ import { signOut } from '../armazenamento/contasLocais';
 
 import DadosUsuario from './DadosUsuario';
 import Configuracoes from './Configuracoes';
+import { useEspacoTopo } from '../navegacao/BotaoMenu';
 import CameraScreen from '../camera/CameraScreen';
 
 import { auth } from '../config/armazenamento';
@@ -39,6 +40,9 @@ export default function PerfilScreen({
   grupoId,
   onTelaCheia,
 }) {
+  // Título abaixo do "‹ Menu" (que acompanha a área segura).
+  const espacoTopo = useEspacoTopo(60);
+
   const [abrirCamera, setAbrirCamera] = useState(false);
   const [salvandoFoto, setSalvandoFoto] = useState(false);
 
@@ -271,9 +275,10 @@ export default function PerfilScreen({
       <ScrollView
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={
-          styles.conteudo
-        }
+        contentContainerStyle={[
+          styles.conteudo,
+          { paddingTop: espacoTopo },
+        ]}
       >
         <Text style={styles.title}>
           Meu Perfil

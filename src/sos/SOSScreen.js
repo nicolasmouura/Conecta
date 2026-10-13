@@ -21,6 +21,7 @@ import {
 } from '../dados/sos';
 import { coordenadaValida } from '../dados/buscarFamiliares';
 
+import { useEspacoTopo } from '../navegacao/BotaoMenu';
 import { cores, fontes, raio, sombra } from '../theme/theme';
 
 function CartaoSOS({ alerta, meu }) {
@@ -88,6 +89,8 @@ function CartaoSOS({ alerta, meu }) {
 // Tela de emergência: acionar e acompanhar SOS. Encerrar o próprio SOS
 // só em Perfil → Configurações → Segurança (sos/EncerrarSOS.js).
 export default function SOSScreen({ usuario, grupoId }) {
+  // Título abaixo do "‹ Menu" (que acompanha a área segura).
+  const espacoTopo = useEspacoTopo(100);
   const [alertas, setAlertas] = useState(null);
   const [erro, setErro] = useState('');
   const [enviando, setEnviando] = useState(false);
@@ -155,7 +158,7 @@ export default function SOSScreen({ usuario, grupoId }) {
   return (
     <ScrollView
       style={styles.container}
-      contentContainerStyle={styles.conteudo}
+      contentContainerStyle={[styles.conteudo, { paddingTop: espacoTopo }]}
     >
       <Text style={styles.titulo}>SOS — Emergência</Text>
       <Text style={styles.subtitulo}>
