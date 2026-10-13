@@ -68,7 +68,6 @@ service cloud.firestore {
     function dadosPessoaisValidos(dados) {
       return (!('nome' in dados) || nomeValido(dados.nome))
         && textoOpcional(dados, 'telefone', 20)
-        && textoOpcional(dados, 'documento', 20)
         && textoOpcional(dados, 'endereco', 400)
         && (!('enderecoDetalhado' in dados) || enderecoDetalhadoValido(dados.enderecoDetalhado))
         && textoOpcional(dados, 'atualizadoEm', 40)
@@ -83,17 +82,26 @@ service cloud.firestore {
             && dados.foto.matches('^data:image/jpeg;base64,[A-Za-z0-9+/=]+$'));
     }
 
-    // CPF é guardado no campo "documento" no formato 000.000.000-00.
+    // CPF no formato 000.000.000-00.
     function cpfFormatado(valor) {
       return valor is string && valor.matches('^[0-9]{3}[.][0-9]{3}[.][0-9]{3}-[0-9]{2}$');
     }
 
-    // CPF imutável: depois de preenchido não muda nem é apagado.
-    // Conta antiga sem CPF pode informá-lo uma única vez.
-    function documentoImutavel() {
-      let anterior = resource.data.get('documento', '');
-      let novo = request.resource.data.get('documento', '');
-      return novo == anterior || (anterior == '' && cpfFormatado(novo));
+    function caminhoDocumentos(uid) {
+      return /databases/$(database)/documents/usuarios/$(uid)/privado/documentos;
+    }
+
+    // O CPF fica em usuarios/{uid}/privado/documentos (só o dono lê).
+    // Contas antigas ainda têm o campo "documento" no perfil, que a
+    // família lê: ele não muda, e só pode SAIR se, no mesmo lote, a
+    // cópia privada tiver o mesmo valor. Nunca entra de novo.
+    function documentoSoSaiParaAreaPrivada(userId) {
+      let anterior = resource.data.get('documento', null);
+      let novo = request.resource.data.get('documento', null);
+      return novo == anterior
+        || (novo == null
+            && existsAfter(caminhoDocumentos(userId))
+            && getAfter(caminhoDocumentos(userId)).data.cpf == anterior);
     }
 
     // O perfil pertence a uma família da qual o usuário atual é membro.
@@ -278,6 +286,7 @@ service cloud.firestore {
         && dados.paraEmail != meuEmail()
         && conviteId == dados.grupoId + '_' + dados.paraEmail
         && dados.status == 'pendente'
+        && textoObrigatorio(dados.criadoEm, 40)
         && dados.grupoNome == get(caminhoGrupo(dados.grupoId)).data.nome
         && dados.deNome == get(caminhoMembro(dados.grupoId, meuUid())).data.nome;
     }
@@ -287,8 +296,10 @@ service cloud.firestore {
       return autenticado()
         && resource.data.status == 'pendente'
         && resource.data.paraEmail == meuEmail()
+        && resource.data.paraUid == meuUid()
         && dados.diff(resource.data).affectedKeys().hasOnly(['status', 'paraUid', 'respondidoEm'])
         && dados.paraUid == meuUid()
+        && textoObrigatorio(dados.respondidoEm, 40)
         && (
           dados.status == 'recusado'
           || (dados.status == 'aceito'
@@ -308,23 +319,40 @@ service cloud.firestore {
 
       allow create: if autenticado()
         && meuUid() == userId
-        && request.resource.data.keys().hasOnly(['nome', 'email', 'uid', 'criadoEm', 'grupoId', 'telefone', 'documento', 'endereco', 'enderecoDetalhado', 'atualizadoEm', 'foto'])
+        && request.resource.data.keys().hasOnly(['nome', 'email', 'uid', 'criadoEm', 'grupoId', 'telefone', 'endereco', 'enderecoDetalhado', 'atualizadoEm', 'foto'])
         && request.resource.data.get('uid', userId) == userId
         && (!('email' in request.resource.data) || request.resource.data.email.lower() == meuEmail())
+        && textoOpcional(request.resource.data, 'criadoEm', 40)
         && dadosPessoaisValidos(request.resource.data)
-        && (!('documento' in request.resource.data) || cpfFormatado(request.resource.data.documento))
         && vinculoDeFamiliaValido(null);
 
-      // uid, email e criadoEm não podem mudar; CPF (documento) não muda
-      // depois de preenchido. grupoId só muda pelo fluxo de família/convite.
+      // uid, email e criadoEm não podem mudar; o CPF antigo (documento)
+      // só sai para a área privada. grupoId só muda pelo fluxo de família/convite.
       allow update: if autenticado()
         && meuUid() == userId
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nome', 'telefone', 'documento', 'endereco', 'enderecoDetalhado', 'atualizadoEm', 'grupoId', 'foto'])
         && dadosPessoaisValidos(request.resource.data)
-        && documentoImutavel()
+        && documentoSoSaiParaAreaPrivada(userId)
         && vinculoDeFamiliaValido(resource.data.get('grupoId', null));
 
       allow delete: if false;
+
+      // Dados sensíveis (CPF): SÓ o dono lê; a família não.
+      // O CPF é gravado uma única vez e nunca muda nem é apagado.
+      // Conta antiga: tem que ser o mesmo CPF que estava no perfil.
+      match /privado/{documentoId} {
+        allow read: if autenticado() && meuUid() == userId;
+
+        allow create: if autenticado()
+          && meuUid() == userId
+          && documentoId == 'documentos'
+          && request.resource.data.keys().hasOnly(['cpf'])
+          && cpfFormatado(request.resource.data.cpf)
+          && (!exists(caminhoUsuario(userId))
+              || get(caminhoUsuario(userId)).data.get('documento', request.resource.data.cpf) == request.resource.data.cpf);
+
+        allow update, delete: if false;
+      }
 
       match /conquistas/{conquistaId} {
         allow read, write: if autenticado() && meuUid() == userId;
@@ -352,6 +380,7 @@ service cloud.firestore {
       allow create: if autenticado()
         && request.resource.data.keys().hasOnly(['nome', 'administradorUid', 'membros', 'criadoEm'])
         && nomeValido(request.resource.data.nome)
+        && textoObrigatorio(request.resource.data.criadoEm, 40)
         && request.resource.data.administradorUid == meuUid()
         && request.resource.data.membros == [meuUid()]
         && semFamilia()
@@ -387,6 +416,8 @@ service cloud.firestore {
           && request.resource.data.keys().hasOnly(['uid', 'nome', 'papel', 'status', 'entrouEm', 'conviteId'])
           && request.resource.data.uid == meuUid()
           && nomeValido(request.resource.data.nome)
+          && textoObrigatorio(request.resource.data.entrouEm, 40)
+          && textoOpcional(request.resource.data, 'conviteId', 400)
           && request.resource.data.status == 'ativo'
           && request.resource.data.papel == (
             getAfter(caminhoGrupo(grupoId)).data.administradorUid == meuUid()

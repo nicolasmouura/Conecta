@@ -1,4 +1,4 @@
-import { doc, getDoc, setDoc, writeBatch } from 'firebase/firestore';
+import { deleteField, doc, getDoc, setDoc, writeBatch } from 'firebase/firestore';
 
 import { auth, db } from '../config/firebase';
 
@@ -10,6 +10,55 @@ export const LIMITES_PERFIL = {
   documento: 20,
   endereco: 400,
 };
+
+/*
+ * CPF: fica em usuarios/{uid}/privado/documentos ({ cpf }), que só o
+ * dono lê (firestore.rules). O perfil usuarios/{uid} é lido pela
+ * família, então nunca leva o CPF. Contas antigas tinham o CPF no
+ * campo "documento" do perfil: protegerDocumento() o move no login.
+ */
+function referenciaDocumentos(uid) {
+  return doc(db, 'usuarios', uid, 'privado', 'documentos');
+}
+
+// CPF do próprio usuário ('' se não tiver). Só o dono consegue ler.
+// dadosPerfil: usuarios/{uid} já lido (conta antiga ainda não migrada).
+async function buscarDocumento(uid, dadosPerfil) {
+  const privado = await getDoc(referenciaDocumentos(uid));
+
+  if (privado.exists()) return privado.data().cpf || '';
+
+  return dadosPerfil?.documento || '';
+}
+
+/*
+ * Conta antiga: move o CPF do perfil (lido pela família) para o
+ * documento privado, no mesmo lote. Não faz nada se já foi movido.
+ */
+export async function protegerDocumento(uid) {
+  if (auth.currentUser?.uid !== uid) return false;
+
+  const referenciaPerfil = doc(db, 'usuarios', uid);
+  const perfil = await getDoc(referenciaPerfil);
+  const documento = perfil.exists() ? perfil.data().documento : undefined;
+
+  if (documento === undefined) return false;
+
+  const lote = writeBatch(db);
+  const privado = await getDoc(referenciaDocumentos(uid));
+
+  if (!privado.exists() && documento) {
+    lote.set(referenciaDocumentos(uid), { cpf: documento });
+  }
+
+  lote.update(referenciaPerfil, { documento: deleteField() });
+
+  await lote.commit();
+
+  console.log('CPF movido para a área privada:', uid);
+
+  return true;
+}
 
 /*
  * Índice para convites: diretorioConvites/{nome|email} → { uid }.
@@ -74,8 +123,8 @@ export async function garantirEntradaDiretorio(uid) {
 }
 
 /*
- * Cadastro: cria usuarios/{uid} com os dados pessoais.
- * O CPF fica no campo "documento" (mesmo campo da Etapa 2).
+ * Cadastro: cria usuarios/{uid} com os dados pessoais e, à parte,
+ * o CPF em usuarios/{uid}/privado/documentos (só o dono lê).
  * A senha nunca passa por aqui: é do Firebase Authentication.
  */
 export async function salvarPerfilUsuario(usuario) {
@@ -86,7 +135,6 @@ export async function salvarPerfilUsuario(usuario) {
     criadoEm: new Date().toISOString(),
   };
 
-  if (usuario.cpf) perfil.documento = formatarCPF(usuario.cpf);
   if (usuario.telefone) perfil.telefone = formatarTelefone(usuario.telefone);
   if (usuario.endereco) perfil.endereco = usuario.endereco.trim();
 
@@ -94,6 +142,10 @@ export async function salvarPerfilUsuario(usuario) {
   const lote = writeBatch(db);
 
   lote.set(doc(db, 'usuarios', usuario.uid), perfil);
+
+  if (usuario.cpf) {
+    lote.set(referenciaDocumentos(usuario.uid), { cpf: formatarCPF(usuario.cpf) });
+  }
   await incluirNoDiretorio(lote, usuario.uid, perfil.nome, auth.currentUser?.email || usuario.email);
 
   await lote.commit();
@@ -120,13 +172,18 @@ function normalizarPerfil(uid, dados = {}) {
   };
 }
 
+// O próprio perfil vem com o CPF (área privada); o de outra pessoa, sem.
 export async function buscarPerfil(uid) {
   const resultado = await getDoc(doc(db, 'usuarios', uid));
+  const dados = resultado.exists() ? resultado.data() : {};
 
-  return normalizarPerfil(
-    uid,
-    resultado.exists() ? resultado.data() : {}
-  );
+  if (auth.currentUser?.uid === uid) {
+    return normalizarPerfil(uid, { ...dados, documento: await buscarDocumento(uid, dados) });
+  }
+
+  const { documento, ...semDocumento } = dados;
+
+  return normalizarPerfil(uid, semDocumento);
 }
 
 // Perfis dos membros da família. Um perfil que não puder
@@ -137,9 +194,12 @@ export async function buscarPerfisDosMembros(uids) {
       try {
         const resultado = await getDoc(doc(db, 'usuarios', uid));
 
-        return resultado.exists()
-          ? normalizarPerfil(uid, resultado.data())
-          : null;
+        if (!resultado.exists()) return null;
+
+        // O CPF nunca vai para a tela da família.
+        const { documento, ...semDocumento } = resultado.data();
+
+        return normalizarPerfil(uid, semDocumento);
       } catch (erro) {
         console.error('Erro ao buscar perfil do membro:', uid, erro);
         return null;
@@ -313,15 +373,22 @@ export async function atualizarPerfil(uid, dados) {
   const dadosAtuais = atual.exists() ? atual.data() : {};
   const grupoId = dadosAtuais.grupoId || null;
 
-  if (!dadosAtuais.documento && dados.cpf) {
+  let cpfNovo = null;
+
+  if (dados.cpf && !(await buscarDocumento(uid, dadosAtuais))) {
     if (!cpfValido(dados.cpf)) {
       throw new Error('CPF_INVALIDO');
     }
 
-    perfil.documento = formatarCPF(dados.cpf);
+    cpfNovo = formatarCPF(dados.cpf);
   }
 
   const lote = writeBatch(db);
+
+  // CPF informado pela primeira vez (conta antiga sem CPF): área privada.
+  if (cpfNovo) {
+    lote.set(referenciaDocumentos(uid), { cpf: cpfNovo });
+  }
 
   lote.set(
     referenciaPerfil,
@@ -364,5 +431,6 @@ export async function atualizarPerfil(uid, dados) {
 
   console.log('Perfil atualizado:', uid);
 
-  return perfil;
+  // A tela mostra o CPF (mascarado) logo depois de salvar.
+  return cpfNovo ? { ...perfil, documento: cpfNovo } : perfil;
 }

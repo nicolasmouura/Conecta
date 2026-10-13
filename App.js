@@ -37,7 +37,7 @@ import SOSScreen from './src/sos/SOSScreen';
 
 import AutenticacaoScreen from './src/autenticacao/AutenticacaoScreen';
 import VerificaBiometria from './src/biometria/VerificaBiometria';
-import { garantirEntradaDiretorio } from './src/dados/salvarUsuario';
+import { garantirEntradaDiretorio, protegerDocumento } from './src/dados/salvarUsuario';
 import { limparDadosAntigos } from './src/dados/limparDadosAntigos';
 import { apagarSenhaOffline } from './src/dados/senhaOffline';
 import GrupoScreen from './src/grupo/GrupoScreen';
@@ -112,6 +112,14 @@ export default function App() {
           garantirEntradaDiretorio(usuario.uid).catch((erro) =>
             console.log(
               'Índice de convites não atualizado:',
+              erro.code || erro.message
+            )
+          );
+
+          // Contas antigas: CPF sai do perfil (lido pela família).
+          protegerDocumento(usuario.uid).catch((erro) =>
+            console.log(
+              'CPF não movido para a área privada:',
               erro.code || erro.message
             )
           );

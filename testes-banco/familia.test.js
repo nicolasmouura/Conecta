@@ -3,12 +3,14 @@ import {
   addDoc,
   collection,
   deleteDoc,
+  deleteField,
   doc,
   getDoc,
   getDocs,
   serverTimestamp,
   setDoc,
   updateDoc,
+  writeBatch,
 } from 'firebase/firestore';
 
 import { encerrarBanco, entrarComo, iniciarBanco, limparBanco, sair, semRegras } from './contexto';
@@ -18,6 +20,7 @@ import {
   buscarPerfisDosMembros,
   chaveDiretorio,
   garantirEntradaDiretorio,
+  protegerDocumento,
   salvarFotoPerfil,
   salvarPerfilUsuario,
 } from '../src/dados/salvarUsuario';
@@ -588,5 +591,242 @@ describe('8. SOS', () => {
     const db = entrarComo(BRUNO);
 
     await assertFails(deleteDoc(doc(db, 'alertasSOS', alertaId)));
+  });
+});
+
+describe('9. CPF só para o dono', () => {
+  test('a família lê o perfil, mas sem o CPF (nem pela API)', async () => {
+    const db = entrarComo(BRUNO);
+
+    const perfilBruto = await getDoc(doc(db, 'usuarios', ANA.uid));
+    expect(perfilBruto.data()).not.toHaveProperty('documento');
+    expect((await buscarPerfil(ANA.uid)).documento).toBe('');
+    expect((await buscarPerfisDosMembros([ANA.uid]))[ANA.uid].documento).toBe('');
+
+    await assertFails(getDoc(doc(db, 'usuarios', ANA.uid, 'privado', 'documentos')));
+  });
+
+  test('o dono lê o próprio CPF', async () => {
+    const db = entrarComo(ANA);
+
+    await assertSucceeds(getDoc(doc(db, 'usuarios', ANA.uid, 'privado', 'documentos')));
+    expect((await buscarPerfil(ANA.uid)).documento).toBe(ANA.cpf);
+  });
+
+  test('o CPF não muda, não é apagado e não volta para o perfil', async () => {
+    const db = entrarComo(ANA);
+    const privado = doc(db, 'usuarios', ANA.uid, 'privado', 'documentos');
+
+    await assertFails(updateDoc(privado, { cpf: '111.444.777-35' }));
+    await assertFails(deleteDoc(privado));
+    await assertFails(setDoc(doc(db, 'usuarios', ANA.uid, 'privado', 'outro'), { cpf: ANA.cpf }));
+    await assertFails(updateDoc(doc(db, 'usuarios', ANA.uid), { documento: ANA.cpf }));
+  });
+
+  test('ninguém grava CPF na área privada de outra pessoa', async () => {
+    const db = entrarComo(CARLOS);
+
+    await assertFails(
+      setDoc(doc(db, 'usuarios', 'conta-sem-cpf', 'privado', 'documentos'), { cpf: CARLOS.cpf })
+    );
+  });
+
+  test('cadastro novo não aceita CPF no perfil público', async () => {
+    const db = entrarComo({ uid: 'nova', email: 'nova@teste.com' });
+
+    await assertFails(
+      setDoc(doc(db, 'usuarios', 'nova'), { nome: 'Nova', uid: 'nova', documento: ANA.cpf })
+    );
+  });
+});
+
+describe('10. conta antiga com CPF no perfil', () => {
+  const DAVI = { uid: 'davi', email: 'davi@teste.com', nome: 'Davi Rocha', cpf: '935.411.347-80' };
+
+  beforeAll(async () => {
+    // Perfil gravado antes da mudança: CPF no campo "documento".
+    await semRegras((db) =>
+      setDoc(doc(db, 'usuarios', DAVI.uid), {
+        nome: DAVI.nome,
+        email: DAVI.email,
+        uid: DAVI.uid,
+        criadoEm: new Date().toISOString(),
+        documento: DAVI.cpf,
+      })
+    );
+  });
+
+  test('não dá para tirar o CPF do perfil sem a cópia privada igual', async () => {
+    const db = entrarComo(DAVI);
+
+    await assertFails(updateDoc(doc(db, 'usuarios', DAVI.uid), { documento: deleteField() }));
+    await assertFails(
+      setDoc(doc(db, 'usuarios', DAVI.uid, 'privado', 'documentos'), { cpf: '111.444.777-35' })
+    );
+  });
+
+  test('no login o CPF é movido para a área privada', async () => {
+    entrarComo(DAVI);
+
+    expect((await buscarPerfil(DAVI.uid)).documento).toBe(DAVI.cpf);
+    expect(await protegerDocumento(DAVI.uid)).toBe(true);
+
+    const [perfil, privado] = await semRegras((db) =>
+      Promise.all([
+        getDoc(doc(db, 'usuarios', DAVI.uid)),
+        getDoc(doc(db, 'usuarios', DAVI.uid, 'privado', 'documentos')),
+      ])
+    );
+
+    expect(perfil.data()).not.toHaveProperty('documento');
+    expect(privado.data()).toEqual({ cpf: DAVI.cpf });
+    expect((await buscarPerfil(DAVI.uid)).documento).toBe(DAVI.cpf);
+
+    // Próximo login: nada a fazer.
+    expect(await protegerDocumento(DAVI.uid)).toBe(false);
+  });
+
+  test('conta antiga sem CPF informa uma única vez', async () => {
+    const EVA = { uid: 'eva', email: 'eva@teste.com', nome: 'Eva Melo' };
+
+    await semRegras((db) =>
+      setDoc(doc(db, 'usuarios', EVA.uid), {
+        nome: EVA.nome,
+        email: EVA.email,
+        uid: EVA.uid,
+        criadoEm: new Date().toISOString(),
+      })
+    );
+
+    entrarComo(EVA);
+
+    const salvo = await atualizarPerfil(EVA.uid, {
+      nome: EVA.nome,
+      telefone: '(21) 97777-6666',
+      cpf: '111.444.777-35',
+    });
+
+    expect(salvo.documento).toBe('111.444.777-35');
+    expect((await buscarPerfil(EVA.uid)).documento).toBe('111.444.777-35');
+
+    // Outro CPF depois: o app ignora (e as regras recusariam).
+    await atualizarPerfil(EVA.uid, {
+      nome: EVA.nome,
+      telefone: '(21) 97777-6666',
+      cpf: '529.982.247-25',
+    });
+    expect((await buscarPerfil(EVA.uid)).documento).toBe('111.444.777-35');
+  });
+});
+
+describe('11. convites: só o convidado responde', () => {
+  let convite;
+
+  beforeAll(async () => {
+    entrarComo(ANA);
+    await enviarConvite({
+      grupo,
+      remetente: { uid: ANA.uid, nome: 'Ana Souza Lima' },
+      nome: CARLOS.nome,
+      email: CARLOS.email,
+    });
+
+    entrarComo(CARLOS);
+    [convite] = await primeiraEmissao((ok, erro) => observarConvitesRecebidos(ok, erro));
+  });
+
+  test('outra conta com o mesmo e-mail não aceita nem recusa', async () => {
+    // Token com o e-mail do Carlos, mas outro uid.
+    entrarComo({ uid: 'impostor', email: CARLOS.email });
+
+    await assertFails(aceitarConvite(convite, { uid: 'impostor', nome: 'Impostor' }));
+    await assertFails(recusarConvite(convite, { uid: 'impostor' }));
+  });
+
+  test('a resposta precisa da data em texto curto', async () => {
+    const db = entrarComo(CARLOS);
+
+    await assertFails(
+      updateDoc(doc(db, 'convites', convite.id), {
+        status: 'recusado',
+        paraUid: CARLOS.uid,
+        respondidoEm: 'x'.repeat(41),
+      })
+    );
+
+    await assertSucceeds(recusarConvite(convite, CARLOS));
+  });
+});
+
+describe('12. campos de texto com limite', () => {
+  const GRANDE = { uid: 'grande', email: 'grande@teste.com' };
+
+  test('perfil com criadoEm gigante é recusado', async () => {
+    const db = entrarComo(GRANDE);
+
+    await assertFails(
+      setDoc(doc(db, 'usuarios', GRANDE.uid), { nome: 'Grande', uid: GRANDE.uid, criadoEm: 'x'.repeat(5000) })
+    );
+    await assertSucceeds(
+      setDoc(doc(db, 'usuarios', GRANDE.uid), {
+        nome: 'Grande',
+        uid: GRANDE.uid,
+        criadoEm: new Date().toISOString(),
+      })
+    );
+  });
+
+  test('convite com criadoEm gigante é recusado', async () => {
+    const db = entrarComo(ANA);
+    const indice = await semRegras((banco) =>
+      getDoc(doc(banco, 'diretorioConvites', chaveDiretorio(CARLOS.nome, CARLOS.email)))
+    );
+
+    await assertFails(
+      setDoc(doc(db, 'convites', `${grupo.id}_${CARLOS.email}`), {
+        grupoId: grupo.id,
+        grupoNome: 'Família Souza',
+        deUid: ANA.uid,
+        deNome: 'Ana Souza Lima',
+        paraEmail: CARLOS.email,
+        paraNome: 'carlos dias',
+        paraUid: indice.data().uid,
+        status: 'pendente',
+        criadoEm: 'x'.repeat(5000),
+      })
+    );
+  });
+
+  test('família e membro com datas gigantes são recusados', async () => {
+    const db = entrarComo(GRANDE);
+    const grupoNovo = doc(collection(db, 'grupos'));
+
+    // Mesmo lote do criarGrupo, só com os textos de data enormes.
+    const montar = (criadoEm, entrouEm) => {
+      const lote = writeBatch(db);
+
+      lote.set(grupoNovo, {
+        nome: 'Grande',
+        administradorUid: GRANDE.uid,
+        membros: [GRANDE.uid],
+        criadoEm,
+      });
+      lote.set(doc(db, 'grupos', grupoNovo.id, 'membros', GRANDE.uid), {
+        uid: GRANDE.uid,
+        nome: 'Grande',
+        papel: 'administrador',
+        status: 'ativo',
+        entrouEm,
+      });
+      lote.set(doc(db, 'usuarios', GRANDE.uid), { grupoId: grupoNovo.id }, { merge: true });
+
+      return lote.commit();
+    };
+
+    const agora = new Date().toISOString();
+
+    await assertFails(montar('x'.repeat(5000), agora));
+    await assertFails(montar(agora, 'x'.repeat(5000)));
+    await assertSucceeds(montar(agora, agora));
   });
 });

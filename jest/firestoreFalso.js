@@ -70,6 +70,26 @@ export function arrayUnion(...valores) {
   return new ValorEspecial('arrayUnion', valores);
 }
 
+// update / set com merge: o campo some do documento.
+export function deleteField() {
+  return new ValorEspecial('apagarCampo');
+}
+
+const APAGAR = Symbol('apagar');
+
+// Tira os campos marcados com deleteField() (também em mapas aninhados).
+function semApagados(dados) {
+  const resultado = {};
+
+  for (const [campo, valor] of Object.entries(dados)) {
+    if (valor === APAGAR) continue;
+
+    resultado[campo] = objetoSimples(valor) ? semApagados(valor) : valor;
+  }
+
+  return resultado;
+}
+
 function objetoSimples(valor) {
   return (
     valor !== null &&
@@ -81,6 +101,10 @@ function objetoSimples(valor) {
 // Troca os valores especiais pelo valor final (como o Firestore faz ao gravar).
 function resolver(valor, anterior, agora) {
   if (valor instanceof ValorEspecial) {
+    if (valor.tipo === 'apagarCampo') {
+      return APAGAR;
+    }
+
     if (valor.tipo === 'horaDoServidor') {
       return new Timestamp(agora);
     }
@@ -565,11 +589,11 @@ function aplicar(operacoes) {
           throw erroBanco('not-found', `Documento não encontrado: ${caminho}`);
         }
 
-        novos.set(caminho, { ...atual, ...resolver(dados, atual, agora) });
+        novos.set(caminho, semApagados({ ...atual, ...resolver(dados, atual, agora) }));
       } else if (opcoes?.merge && atual !== undefined) {
-        novos.set(caminho, mesclar(atual, resolver(dados, atual, agora)));
+        novos.set(caminho, semApagados(mesclar(atual, resolver(dados, atual, agora))));
       } else {
-        novos.set(caminho, resolver(dados, undefined, agora));
+        novos.set(caminho, semApagados(resolver(dados, undefined, agora)));
       }
     }
 

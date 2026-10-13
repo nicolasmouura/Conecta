@@ -1,5 +1,4 @@
 import { StyleSheet, Text, View } from 'react-native';
-import { mascararDocumento } from '../dados/salvarUsuario';
 import { cores, fontes, raio, sombra } from '../theme/theme';
 
 const STATUS = {
@@ -56,15 +55,6 @@ export default function MembroCard({ nome, status, papel, perfil, voce }) {
         {status === 'ativo' && (
           <View style={styles.dados}>
             <Informacao label="Telefone" valor={perfil?.telefone} />
-
-            <Informacao
-              label="Documento"
-              valor={
-                perfil?.documento
-                  ? mascararDocumento(perfil.documento)
-                  : ''
-              }
-            />
 
             <Informacao label="Onde mora" valor={perfil?.endereco} />
           </View>
