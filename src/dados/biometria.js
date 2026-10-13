@@ -153,9 +153,9 @@ export function proximoPasso(classificacao, falhas) {
   }
 }
 
-export async function autenticarComBiometria() {
+export async function autenticarComBiometria(mensagem = 'Entrar no Conecta') {
   const opcoes = {
-    promptMessage: 'Entrar no Conecta',
+    promptMessage: mensagem,
     promptSubtitle: 'Confirme que é você',
     cancelLabel: 'Cancelar',
     // Sem alternativa: nem o PIN do aparelho nem o botão "usar senha".

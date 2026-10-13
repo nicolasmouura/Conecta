@@ -36,6 +36,7 @@ export default function PerfilScreen({
   onSair,
   onPerfilAtualizado,
   posicaoAtual,
+  grupoId,
   onTelaCheia,
 }) {
   const [abrirCamera, setAbrirCamera] = useState(false);
@@ -327,6 +328,7 @@ export default function PerfilScreen({
             onSalvarPerfil={salvarPerfil}
             onCasaSalva={aplicarCasa}
             posicaoAtual={posicaoAtual}
+            grupoId={grupoId}
             onSair={
               sairDoAplicativo
             }

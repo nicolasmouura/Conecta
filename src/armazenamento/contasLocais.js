@@ -164,6 +164,34 @@ export async function signOut() {
   avisarOuvintes();
 }
 
+/*
+ * Confirmar a senha da conta aberta sem trocar a sessão (ex.: encerrar
+ * o SOS). Mesmos nomes do Firebase:
+ *   reauthenticateWithCredential(auth.currentUser,
+ *     EmailAuthProvider.credential(email, senha))
+ */
+export const EmailAuthProvider = {
+  credential: (email, senha) => ({ email: normalizarEmail(email), senha }),
+};
+
+export async function reauthenticateWithCredential(usuario, credencial) {
+  await carregamento;
+
+  if (!usuario?.uid || credencial?.email !== usuario.email) {
+    throw erroAuth('auth/user-mismatch');
+  }
+
+  if (!credencial.senha) throw erroAuth('auth/missing-password');
+
+  const senhaSalva = await SecureStore.getItemAsync(chaveSenha(usuario.uid));
+
+  if (senhaSalva === null || senhaSalva !== credencial.senha) {
+    throw erroAuth('auth/invalid-credential');
+  }
+
+  return { user: usuario };
+}
+
 // Sem servidor não há como enviar e-mail.
 export async function sendPasswordResetEmail(_auth, email) {
   if (!EMAIL_VALIDO.test(normalizarEmail(email))) {

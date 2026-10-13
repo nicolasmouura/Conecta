@@ -1,12 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 
 import {
   ActivityIndicator,
   Alert,
-  AppState,
-  Linking,
   StyleSheet,
-  Switch,
   Text,
   TouchableOpacity,
   View,
@@ -15,18 +12,10 @@ import {
 import { Feather } from '@expo/vector-icons';
 
 import { biometriaDisponivel } from '../dados/biometria';
-import {
-  estadoPermissao,
-  lerPreferencias,
-  notificar,
-  pedirPermissao,
-  PREFERENCIAS_PADRAO,
-  salvarPreferencias,
-  TIPOS_NOTIFICACAO,
-} from '../dados/notificacoes';
 import EditarInformacoes from './EditarInformacoes';
 import MeusLugares from '../lugares/MeusLugares';
 import BotaoVoltar from '../navegacao/BotaoVoltar';
+import EncerrarSOS from '../sos/EncerrarSOS';
 import { cores, fontes } from '../theme/theme';
 
 const ITENS = [
@@ -41,11 +30,6 @@ const ITENS = [
     icone: 'home',
   },
   {
-    chave: 'notificacoes',
-    label: 'Notificações',
-    icone: 'bell',
-  },
-  {
     chave: 'seguranca',
     label: 'Segurança',
     icone: 'lock',
@@ -58,6 +42,7 @@ export default function Configuracoes({
   onSalvarPerfil,
   onCasaSalva,
   posicaoAtual,
+  grupoId,
   onSair,
 }) {
   const [editarAberto, setEditarAberto] =
@@ -66,97 +51,11 @@ export default function Configuracoes({
   const [lugaresAberto, setLugaresAberto] =
     useState(false);
 
-  const [notificacoesAbertas, setNotificacoesAbertas] =
-    useState(false);
-
-  const [notificacoes, setNotificacoes] = useState(
-    PREFERENCIAS_PADRAO
-  );
-
-  // Permissão do aparelho: null = verificando.
-  const [permissao, setPermissao] = useState(null);
-
   const [segurancaAberta, setSegurancaAberta] =
     useState(false);
 
   // null = carregando
   const [biometriaOk, setBiometriaOk] = useState(null);
-
-  const uid = usuario?.uid;
-
-  useEffect(() => {
-    if (!uid) {
-      setNotificacoes(PREFERENCIAS_PADRAO);
-      return;
-    }
-
-    lerPreferencias(uid).then(setNotificacoes);
-  }, [uid]);
-
-  // Com a tela de notificações aberta, confere a permissão também
-  // ao voltar das configurações do aparelho.
-  useEffect(() => {
-    if (!notificacoesAbertas) return undefined;
-
-    estadoPermissao().then(setPermissao);
-
-    const assinatura = AppState.addEventListener('change', (estado) => {
-      if (estado === 'active') estadoPermissao().then(setPermissao);
-    });
-
-    return () => assinatura.remove();
-  }, [notificacoesAbertas]);
-
-  async function alternarNotificacao(chave) {
-    const novasConfiguracoes = {
-      ...notificacoes,
-      [chave]: !notificacoes[chave],
-    };
-
-    setNotificacoes(novasConfiguracoes);
-
-    if (!uid) {
-      return;
-    }
-
-    try {
-      await salvarPreferencias(uid, novasConfiguracoes);
-    } catch (error) {
-      console.error(
-        'Erro ao salvar configurações de notificações:',
-        error
-      );
-    }
-  }
-
-  async function permitirNotificacoes() {
-    if (permissao && !permissao.podePedir) {
-      Linking.openSettings();
-      return;
-    }
-
-    await pedirPermissao();
-    setPermissao(await estadoPermissao());
-  }
-
-  async function testarNotificacao() {
-    const permitido = await pedirPermissao();
-
-    setPermissao(await estadoPermissao());
-
-    if (!permitido) {
-      Alert.alert(
-        'Notificações bloqueadas',
-        'Permita as notificações do Conecta nas configurações do aparelho.'
-      );
-      return;
-    }
-
-    await notificar({
-      titulo: 'Conecta',
-      corpo: 'As notificações estão funcionando.',
-    });
-  }
 
   function tocarOpcao(chave) {
     if (chave === 'lugares') {
@@ -177,11 +76,6 @@ export default function Configuracoes({
       return;
     }
 
-    if (chave === 'notificacoes') {
-      setNotificacoesAbertas(true);
-      return;
-    }
-
     if (chave === 'seguranca') {
       abrirSeguranca();
     }
@@ -192,10 +86,6 @@ export default function Configuracoes({
     setBiometriaOk(null);
 
     setBiometriaOk(await biometriaDisponivel());
-  }
-
-  function voltarConfiguracoes() {
-    setNotificacoesAbertas(false);
   }
 
   function confirmarSaida() {
@@ -251,12 +141,25 @@ export default function Configuracoes({
           Segurança
         </Text>
 
+        <Text style={styles.secao}>
+          SOS
+        </Text>
+
+        <EncerrarSOS
+          usuario={usuario}
+          grupoId={grupoId}
+        />
+
+        <Text style={styles.secao}>
+          Acesso ao aplicativo
+        </Text>
+
         {biometriaOk === null ? (
           <ActivityIndicator color={cores.primaria} />
         ) : (
           <>
-            <View style={styles.notificacao}>
-              <View style={styles.notificacaoIcone}>
+            <View style={styles.opcao}>
+              <View style={styles.opcaoIcone}>
                 <Feather
                   name="lock"
                   size={19}
@@ -264,12 +167,12 @@ export default function Configuracoes({
                 />
               </View>
 
-              <View style={styles.notificacaoConteudo}>
-                <Text style={styles.notificacaoTitulo}>
+              <View style={styles.opcaoConteudo}>
+                <Text style={styles.opcaoTitulo}>
                   Reconhecimento facial obrigatório
                 </Text>
 
-                <Text style={styles.notificacaoDescricao}>
+                <Text style={styles.opcaoDescricao}>
                   Sempre que você abre o Conecta ou volta para
                   ele, o reconhecimento facial é pedido. Depois
                   de 3 falhas, é preciso entrar com e-mail e
@@ -300,102 +203,6 @@ export default function Configuracoes({
             </Text>
           </>
         )}
-      </View>
-    );
-  }
-
-  if (notificacoesAbertas) {
-    return (
-      <View style={styles.container}>
-        <BotaoVoltar
-          label="Configurações"
-          onPress={voltarConfiguracoes}
-        />
-
-        <Text style={styles.title}>
-          Notificações
-        </Text>
-
-        <Text style={styles.subtitulo}>
-          Escolha quais notificações você deseja receber.
-        </Text>
-
-        {permissao && !permissao.permitido ? (
-          <View style={styles.bloqueio}>
-            <Feather
-              name="bell-off"
-              size={18}
-              color={cores.erro}
-            />
-
-            <View style={styles.notificacaoConteudo}>
-              <Text style={styles.bloqueioTexto}>
-                As notificações do Conecta estão desativadas
-                neste aparelho.
-              </Text>
-
-              <TouchableOpacity onPress={permitirNotificacoes}>
-                <Text style={styles.link}>
-                  {permissao.podePedir
-                    ? 'Permitir notificações'
-                    : 'Abrir configurações do aparelho'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        ) : null}
-
-        {TIPOS_NOTIFICACAO.map((item) => (
-          <View
-            key={item.chave}
-            style={styles.notificacao}
-          >
-            <View style={styles.notificacaoIcone}>
-              <Feather
-                name={item.icone}
-                size={19}
-                color={cores.primaria}
-              />
-            </View>
-
-            <View style={styles.notificacaoConteudo}>
-              <Text style={styles.notificacaoTitulo}>
-                {item.titulo}
-              </Text>
-
-              <Text style={styles.notificacaoDescricao}>
-                {item.descricao}
-              </Text>
-            </View>
-
-            <Switch
-              value={notificacoes[item.chave]}
-              onValueChange={() =>
-                alternarNotificacao(item.chave)
-              }
-              trackColor={{
-                false: cores.borda,
-                true: cores.primaria,
-              }}
-              thumbColor={cores.superficie}
-            />
-          </View>
-        ))}
-
-        <TouchableOpacity
-          style={styles.teste}
-          onPress={testarNotificacao}
-        >
-          <Feather
-            name="send"
-            size={16}
-            color={cores.primaria}
-          />
-
-          <Text style={styles.link}>
-            Enviar notificação de teste
-          </Text>
-        </TouchableOpacity>
       </View>
     );
   }
@@ -465,11 +272,12 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
 
-  subtitulo: {
-    fontSize: 14,
-    color: cores.textoSecundario,
-    lineHeight: 20,
-    marginBottom: 18,
+  secao: {
+    fontSize: 15,
+    fontFamily: fontes.destaque,
+    color: cores.texto,
+    marginTop: 14,
+    marginBottom: 8,
   },
 
   item: {
@@ -507,7 +315,7 @@ const styles = StyleSheet.create({
     fontFamily: fontes.destaque,
   },
 
-  notificacao: {
+  opcao: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 14,
@@ -515,7 +323,7 @@ const styles = StyleSheet.create({
     borderBottomColor: cores.borda,
   },
 
-  notificacaoIcone: {
+  opcaoIcone: {
     width: 38,
     height: 38,
     borderRadius: 19,
@@ -525,12 +333,12 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
 
-  notificacaoConteudo: {
+  opcaoConteudo: {
     flex: 1,
     paddingRight: 10,
   },
 
-  notificacaoTitulo: {
+  opcaoTitulo: {
     fontSize: 15,
     fontFamily: fontes.destaque,
     color: cores.texto,
@@ -544,41 +352,9 @@ const styles = StyleSheet.create({
     marginTop: 14,
   },
 
-  notificacaoDescricao: {
+  opcaoDescricao: {
     fontSize: 12,
     color: cores.textoSecundario,
     lineHeight: 17,
-  },
-
-  bloqueio: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
-    padding: 12,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: cores.erro,
-    borderRadius: 12,
-  },
-
-  bloqueioTexto: {
-    fontSize: 13,
-    lineHeight: 19,
-    color: cores.texto,
-    marginBottom: 6,
-  },
-
-  link: {
-    fontSize: 14,
-    fontFamily: fontes.destaque,
-    color: cores.primaria,
-  },
-
-  teste: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    gap: 8,
-    paddingVertical: 16,
   },
 });

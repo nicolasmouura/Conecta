@@ -109,6 +109,8 @@ export async function acionarSOS({ uid, grupoId, nome }) {
 }
 
 // Só o próprio autor consegue encerrar (garantido pelas regras).
+// Na interface, só por Perfil → Configurações → Segurança, depois de
+// confirmar a identidade (sos/EncerrarSOS.js).
 export async function encerrarSOS(alertaId) {
   await updateDoc(doc(db, 'alertasSOS', alertaId), {
     status: 'encerrado',
@@ -116,6 +118,20 @@ export async function encerrarSOS(alertaId) {
   });
 
   console.log('SOS encerrado:', alertaId);
+}
+
+// O SOS ativo do próprio usuário (ou null).
+export function observarMeuSOS(grupoId, uid, callback, onErro) {
+  if (!grupoId || !uid) {
+    callback(null);
+    return () => {};
+  }
+
+  return onSnapshot(
+    consultaAtivos(grupoId, uid),
+    (consulta) => callback(mapearAlertas(consulta)[0] || null),
+    onErro
+  );
 }
 
 // SOS ativos da família, do mais antigo para o mais recente.

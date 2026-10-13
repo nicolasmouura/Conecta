@@ -153,20 +153,6 @@ export function observarConvitesRecebidos(callback, onErro) {
   );
 }
 
-// Convites enviados por mim, em qualquer status (notificações).
-export function observarConvitesEnviados(uid, callback, onErro) {
-  const consulta = query(
-    collection(db, 'convites'),
-    where('deUid', '==', uid)
-  );
-
-  return onSnapshot(
-    consulta,
-    (resultado) => callback(mapearConvites(resultado)),
-    onErro
-  );
-}
-
 export function observarConvitesPendentesDoGrupo(
   grupoId,
   callback,

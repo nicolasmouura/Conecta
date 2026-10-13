@@ -16,7 +16,6 @@ import MapView, { Marker } from 'react-native-maps';
 import {
   acionarSOS,
   botoesConfirmacaoSOS,
-  encerrarSOS,
   horarioDoAlerta,
   observarSOSAtivos,
 } from '../dados/sos';
@@ -24,7 +23,7 @@ import { coordenadaValida } from '../dados/buscarFamiliares';
 
 import { cores, fontes, raio, sombra } from '../theme/theme';
 
-function CartaoSOS({ alerta, meu, onEncerrar, encerrando }) {
+function CartaoSOS({ alerta, meu }) {
   const temLocalizacao = coordenadaValida(alerta.latitude, alerta.longitude);
 
   return (
@@ -73,22 +72,21 @@ function CartaoSOS({ alerta, meu, onEncerrar, encerrando }) {
         )}
 
         {meu && (
-          <TouchableOpacity
-            style={[styles.botaoEncerrar, encerrando && styles.desabilitado]}
-            onPress={onEncerrar}
-            disabled={encerrando}
-          >
-            <Text style={styles.botaoEncerrarTexto}>
-              {encerrando ? 'Encerrando...' : 'Encerrar meu SOS'}
+          <View style={styles.dicaEncerrar}>
+            <Feather name="lock" size={15} color={cores.textoSecundario} />
+            <Text style={styles.dicaEncerrarTexto}>
+              Para encerrar, vá em Meu Perfil → Configurações → Segurança
+              e confirme com biometria ou senha.
             </Text>
-          </TouchableOpacity>
+          </View>
         )}
       </View>
     </View>
   );
 }
 
-// Tela de emergência: acionar, acompanhar e encerrar SOS.
+// Tela de emergência: acionar e acompanhar SOS. Encerrar o próprio SOS
+// só em Perfil → Configurações → Segurança (sos/EncerrarSOS.js).
 export default function SOSScreen({ usuario, grupoId }) {
   const [alertas, setAlertas] = useState(null);
   const [erro, setErro] = useState('');
@@ -154,26 +152,6 @@ export default function SOSScreen({ usuario, grupoId }) {
     );
   }
 
-  function pedirEncerramento() {
-    Alert.alert('Encerrar SOS?', 'O alerta deixará de aparecer para sua família.', [
-      { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Encerrar',
-        onPress: async () => {
-          try {
-            setEnviando(true);
-            await encerrarSOS(meuAlerta.id);
-          } catch (e) {
-            console.error('Erro ao encerrar SOS:', e);
-            Alert.alert('Não foi possível encerrar o SOS', 'Tente novamente.');
-          } finally {
-            setEnviando(false);
-          }
-        },
-      },
-    ]);
-  }
-
   return (
     <ScrollView
       style={styles.container}
@@ -194,12 +172,7 @@ export default function SOSScreen({ usuario, grupoId }) {
       {alertas !== null && (
         <>
           {meuAlerta ? (
-            <CartaoSOS
-              alerta={meuAlerta}
-              meu
-              onEncerrar={pedirEncerramento}
-              encerrando={enviando}
-            />
+            <CartaoSOS alerta={meuAlerta} meu />
           ) : (
             <TouchableOpacity
               style={[styles.botaoSOS, enviando && styles.desabilitado]}
@@ -365,18 +338,20 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 
-  botaoEncerrar: {
+  dicaEncerrar: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
     marginTop: 12,
-    paddingVertical: 13,
-    borderRadius: raio.pilula,
-    borderWidth: 1.5,
-    borderColor: cores.erro,
-    alignItems: 'center',
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: cores.superficieAlternativa,
   },
 
-  botaoEncerrarTexto: {
-    fontSize: 15,
-    fontFamily: fontes.destaque,
-    color: cores.erro,
+  dicaEncerrarTexto: {
+    flex: 1,
+    fontSize: 13,
+    lineHeight: 19,
+    color: cores.textoSecundario,
   },
 });

@@ -41,7 +41,6 @@ import VerificaBiometria from './src/biometria/VerificaBiometria';
 import { garantirEntradaDiretorio } from './src/dados/salvarUsuario';
 import GrupoScreen from './src/grupo/GrupoScreen';
 import { useCompartilharLocalizacao } from './src/mapa/compartilharLocalizacao';
-import { useNotificacoes } from './src/notificacoes/useNotificacoes';
 import { useVoltarAndroid } from './src/navegacao/voltar';
 
 import {
@@ -230,9 +229,6 @@ export default function App() {
     perfil,
     temGrupo ? grupoId : null
   );
-
-  // Avisos no aparelho (Configurações → Notificações).
-  useNotificacoes(perfil, temGrupo ? grupoId : null);
 
   // Voltar do Android nas telas abertas pelo Menu: volta ao Menu, como
   // o "‹ Menu". As subtelas registram o próprio voltar ao abrir e têm
@@ -425,6 +421,7 @@ export default function App() {
       <PerfilScreen
         usuario={perfil}
         posicaoAtual={localizacao.coordenadas}
+        grupoId={temGrupo ? grupoId : null}
         onTelaCheia={setTelaCheia}
         onSair={sairDoAplicativo}
         onPerfilAtualizado={({ nome }) =>
