@@ -1,8 +1,8 @@
 import * as Location from 'expo-location';
 import * as SMS from 'expo-sms';
 
-import { db } from '../src/config/armazenamento';
-import { doc, setDoc } from '../src/armazenamento/bancoLocal';
+import { db } from '../src/config/firebase';
+import { doc, setDoc } from 'firebase/firestore';
 import {
   enviarSOSPorSMS,
   IDADE_MAXIMA_POSICAO,

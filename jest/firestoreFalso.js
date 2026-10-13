@@ -1,23 +1,21 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 /*
- * Banco local no AsyncStorage, no lugar do Cloud Firestore (por enquanto).
+ * Simulação do Cloud Firestore para os testes (jest.setup.js troca
+ * 'firebase/firestore' por este arquivo). Foi o "bancoLocal" do app
+ * enquanto os dados ficavam só no aparelho.
  *
  * Imita só as funções de 'firebase/firestore' que o app usa, com os
- * mesmos nomes e o mesmo comportamento, para src/dados/* continuar
- * igual. Para voltar ao Firebase, basta trocar os imports de volta.
+ * mesmos nomes e o mesmo comportamento, para o src/dados/* rodar de
+ * verdade nos testes, sem internet.
  *
- * Cada documento fica numa chave própria do AsyncStorage, pelo caminho
- * ("@conecta:banco:usuarios/{uid}", "@conecta:banco:grupos/{id}/membros/{uid}")
- * e, depois da primeira leitura, todos ficam também em memória.
- *
- * Os dados ficam SÓ neste aparelho: família, convites, localização e
- * SOS só se cruzam entre contas criadas no mesmo celular.
+ * Cada documento fica numa chave própria do AsyncStorage (simulado),
+ * pelo caminho ("@teste:banco:usuarios/{uid}") e também em memória.
  */
 
-const PREFIXO = '@conecta:banco:';
+const PREFIXO = '@teste:banco:';
 
-export const db = { tipo: 'bancoLocal' };
+export const db = { tipo: 'firestoreFalso' };
 
 // caminho → dados (já com os Timestamps reconstruídos)
 const documentos = new Map();
@@ -189,7 +187,7 @@ function carregar() {
         try {
           documentos.set(chave.slice(PREFIXO.length), deTexto(texto));
         } catch {
-          console.log('Documento local ilegível ignorado:', chave);
+          console.log('Documento simulado ilegível ignorado:', chave);
         }
       }
     })().catch((erro) => {
@@ -489,7 +487,7 @@ function emitir(ouvinte) {
   try {
     ouvinte.proximo(instantaneo);
   } catch (erro) {
-    console.error('Erro em um ouvinte do banco local:', erro);
+    console.error('Erro em um ouvinte do banco simulado:', erro);
   }
 }
 

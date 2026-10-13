@@ -8,9 +8,9 @@ import {
   serverTimestamp,
   Timestamp,
   where,
-} from '../armazenamento/bancoLocal';
+} from 'firebase/firestore';
 
-import { db } from '../config/armazenamento';
+import { db } from '../config/firebase';
 import {
   coordenadaValida,
   distanciaEmMetros,

@@ -5,9 +5,9 @@ import {
   onSnapshot,
   serverTimestamp,
   writeBatch,
-} from '../armazenamento/bancoLocal';
+} from 'firebase/firestore';
 
-import { db } from '../config/armazenamento';
+import { db } from '../config/firebase';
 import { coordenadaValida, distanciaEmMetros } from './buscarFamiliares';
 import { formatarEndereco, limparEndereco, validarEndereco } from './enderecos';
 

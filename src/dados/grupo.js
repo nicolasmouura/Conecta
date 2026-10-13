@@ -5,9 +5,9 @@ import {
   onSnapshot,
   setDoc,
   writeBatch,
-} from '../armazenamento/bancoLocal';
+} from 'firebase/firestore';
 
-import { db } from '../config/armazenamento';
+import { db } from '../config/firebase';
 
 // Lança JA_POSSUI_FAMILIA se o usuário já estiver vinculado a um grupo.
 export async function garantirSemFamilia(uid) {

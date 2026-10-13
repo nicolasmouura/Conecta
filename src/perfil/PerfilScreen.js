@@ -13,14 +13,14 @@ import {
 
 import * as ImagePicker from 'expo-image-picker';
 
-import { signOut } from '../armazenamento/contasLocais';
+import { signOut } from 'firebase/auth';
 
 import DadosUsuario from './DadosUsuario';
 import Configuracoes from './Configuracoes';
 import { useEspacoTopo } from '../navegacao/BotaoMenu';
 import CameraScreen from '../camera/CameraScreen';
 
-import { auth } from '../config/armazenamento';
+import { auth } from '../config/firebase';
 import {
   atualizarPerfil,
   buscarPerfil,

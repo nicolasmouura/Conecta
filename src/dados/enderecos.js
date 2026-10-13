@@ -89,6 +89,57 @@ export function formatarEndereco(endereco) {
   return `${e.rua}, ${e.numero} - ${e.bairro}, ${e.cidade} - ${e.estado}, ${e.cep}, ${e.pais}`;
 }
 
+/*
+ * CEP → endereço pela ViaCEP (viacep.com.br: gratuita, sem chave).
+ * Retorna { endereco } com os campos que o CEP define (o número fica
+ * de fora) ou { erro }:
+ *   'cep-invalido'     → não tem 8 números
+ *   'nao-encontrado'   → a ViaCEP não conhece esse CEP
+ *   'sem-conexao'      → sem internet, demorou demais ou serviço fora do ar
+ * CEP geral de cidade pequena vem sem rua e bairro: esses ficam vazios.
+ */
+const TEMPO_MAXIMO_CEP = 8000;
+
+export async function buscarCEP(cep, buscar = fetch) {
+  const digitos = (cep || '').replace(/\D/g, '');
+
+  if (digitos.length !== 8) return { erro: 'cep-invalido' };
+
+  const controle = new AbortController();
+  const tempo = setTimeout(() => controle.abort(), TEMPO_MAXIMO_CEP);
+
+  try {
+    const resposta = await buscar(`https://viacep.com.br/ws/${digitos}/json/`, {
+      signal: controle.signal,
+    });
+
+    // A ViaCEP responde 400 para CEP mal formatado.
+    if (resposta.status === 400) return { erro: 'cep-invalido' };
+    if (!resposta.ok) return { erro: 'sem-conexao' };
+
+    const dados = await resposta.json();
+
+    // CEP com formato certo, mas inexistente: { "erro": true } (ou "true").
+    if (!dados || dados.erro) return { erro: 'nao-encontrado' };
+
+    return {
+      endereco: {
+        pais: 'Brasil',
+        estado: (dados.uf || '').trim(),
+        cidade: (dados.localidade || '').trim(),
+        bairro: (dados.bairro || '').trim(),
+        rua: (dados.logradouro || '').trim(),
+        cep: formatarCEP(digitos),
+      },
+    };
+  } catch (erro) {
+    console.log('CEP não consultado:', erro.name || erro.message);
+    return { erro: 'sem-conexao' };
+  } finally {
+    clearTimeout(tempo);
+  }
+}
+
 // Resultado do GPS (reverseGeocodeAsync) → campos do formulário.
 export function enderecoDoResultado(resultado) {
   if (!resultado) return null;

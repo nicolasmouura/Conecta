@@ -5,13 +5,15 @@ import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import {
+  __simularSemInternet,
   auth,
   createUserWithEmailAndPassword,
   EmailAuthProvider,
   reauthenticateWithCredential,
   signInWithEmailAndPassword,
-} from '../src/armazenamento/contasLocais';
+} from 'firebase/auth';
 import { acionarSOS, observarMeuSOS, observarSOSAtivos } from '../src/dados/sos';
+import { apagarSenhaOffline, guardarSenhaOffline } from '../src/dados/senhaOffline';
 import EncerrarSOS from '../src/sos/EncerrarSOS';
 
 // O primeiro render (frio, com as suítes em paralelo) pode passar de 1 s.
@@ -152,6 +154,37 @@ describe('EncerrarSOS (Perfil → Configurações → Segurança)', () => {
     expect(Alert.alert).toHaveBeenCalledWith('SOS encerrado', expect.any(String));
     // Acertar zera o contador de tentativas.
     expect(await SecureStore.getItemAsync(`conecta.sos.senha.falhas.${eu.uid}`)).toBeNull();
+  });
+
+  test('sem internet: confere a senha pelo hash do login', async () => {
+    await acionarSOS({ uid: eu.uid, grupoId: GRUPO, nome: 'A' });
+    await apagarSenhaOffline();
+    controle.resultado = { success: false, error: 'authentication_failed' };
+    __simularSemInternet(true);
+
+    try {
+      await abrirTela();
+      await fireEvent.press(await screen.findByText('Encerrar meu SOS'));
+
+      // Sem hash guardado: avisa, não conta como senha errada.
+      await fireEvent.changeText(await screen.findByPlaceholderText('Senha da conta'), 'senhaA1');
+      await fireEvent.press(screen.getByText('Confirmar senha e encerrar'));
+      expect(await screen.findByText(/Sem internet para conferir a senha/)).toBeTruthy();
+      expect(await SecureStore.getItemAsync(`conecta.sos.senha.falhas.${eu.uid}`)).toBeNull();
+
+      // Com o hash do login: senha errada conta; certa encerra.
+      await guardarSenhaOffline(eu.uid, 'senhaA1');
+
+      await fireEvent.changeText(screen.getByPlaceholderText('Senha da conta'), 'errada');
+      await fireEvent.press(screen.getByText('Confirmar senha e encerrar'));
+      expect(await screen.findByText('Senha incorreta (tentativa 1 de 3).')).toBeTruthy();
+
+      await fireEvent.changeText(screen.getByPlaceholderText('Senha da conta'), 'senhaA1');
+      await fireEvent.press(screen.getByText('Confirmar senha e encerrar'));
+      expect(await screen.findByText('Você não tem nenhum SOS ativo.')).toBeTruthy();
+    } finally {
+      __simularSemInternet(false);
+    }
   });
 
   test('sem biometria no aparelho vai direto para a senha', async () => {

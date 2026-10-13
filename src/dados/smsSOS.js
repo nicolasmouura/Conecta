@@ -1,8 +1,8 @@
 import * as Location from 'expo-location';
 import * as SMS from 'expo-sms';
 
-import { collection, getDocs } from '../armazenamento/bancoLocal';
-import { db } from '../config/armazenamento';
+import { collection, getDocs } from 'firebase/firestore';
+import { db } from '../config/firebase';
 import { coordenadaValida } from './buscarFamiliares';
 import { formatarHorario } from './historico';
 import { buscarPerfisDosMembros } from './salvarUsuario';

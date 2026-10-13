@@ -8,13 +8,20 @@ module.exports = defineConfig([
     ignores: ['dist/*'],
   },
   {
-    // Testes (npm test): globais do Jest.
-    files: ['__tests__/**/*.js', 'jest.setup.js'],
+    // Testes (npm test e npm run test:banco): globais do Jest.
+    files: ['__tests__/**/*.js', 'jest.setup.js', 'testes-banco/**/*.js'],
     languageOptions: {
       globals: Object.fromEntries(
         ['jest', 'describe', 'test', 'it', 'expect', 'beforeAll', 'beforeEach', 'afterAll', 'afterEach']
           .map((nome) => [nome, 'readonly'])
       ),
+    },
+  },
+  {
+    // Rodam no Node (emulador e configurações do Jest), não no app.
+    files: ['testes-banco/**/*.js', 'jest.banco.config.js'],
+    languageOptions: {
+      globals: { __dirname: 'readonly', require: 'readonly', module: 'writable', process: 'readonly' },
     },
   },
   {

@@ -1,6 +1,6 @@
-import { doc, getDoc, setDoc, writeBatch } from '../armazenamento/bancoLocal';
+import { doc, getDoc, setDoc, writeBatch } from 'firebase/firestore';
 
-import { auth, db } from '../config/armazenamento';
+import { auth, db } from '../config/firebase';
 
 // Limites também conferidos no firestore.rules.
 // endereco: a linha montada a partir da Casa (lugares.salvarLugar).

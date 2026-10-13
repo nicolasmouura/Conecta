@@ -10,11 +10,7 @@ import {
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 
-import {
-  EmailAuthProvider,
-  reauthenticateWithCredential,
-} from '../armazenamento/contasLocais';
-import { auth } from '../config/armazenamento';
+import { auth } from '../config/firebase';
 import {
   autenticarComBiometria,
   biometriaDisponivel,
@@ -22,14 +18,16 @@ import {
   registrarFalhaSenhaSOS,
   zerarFalhasSenhaSOS,
 } from '../dados/biometria';
+import { confirmarSenhaDaConta } from '../dados/senhaOffline';
 import { encerrarSOS, horarioDoAlerta, observarMeuSOS } from '../dados/sos';
 import { cores, fontes, raio } from '../theme/theme';
 
 /*
  * Perfil → Configurações → Segurança: o ÚNICO lugar onde o próprio
  * SOS é encerrado. Pede a biometria do aparelho; se ela falhar, for
- * cancelada ou não existir, pede a senha da conta. A senha só é
- * conferida (reauthenticateWithCredential) e nunca é guardada.
+ * cancelada ou não existir, pede a senha da conta. A senha é conferida
+ * no Firebase ou, sem internet, pelo hash guardado no login
+ * (dados/senhaOffline.js); a senha em si nunca é guardada.
  * Depois de MAXIMO_FALHAS senhas erradas a sessão é encerrada (onSair);
  * o SOS continua ativo.
  */
@@ -110,15 +108,22 @@ export default function EncerrarSOS({ usuario, grupoId, onSair }) {
       setOcupado(true);
       setMensagem('');
 
-      await reauthenticateWithCredential(
-        auth.currentUser,
-        EmailAuthProvider.credential(auth.currentUser?.email, senha)
-      );
+      await confirmarSenhaDaConta(auth.currentUser, senha);
     } catch (e) {
       setOcupado(false);
       setSenha('');
 
-      if (e.code !== 'auth/invalid-credential') {
+      if (e.code === 'auth/network-request-failed') {
+        setMensagem('Sem internet para conferir a senha. Use a biometria ou tente quando estiver conectado.');
+        return;
+      }
+
+      if (e.code === 'auth/too-many-requests') {
+        setMensagem('Muitas tentativas. Aguarde alguns minutos e tente novamente.');
+        return;
+      }
+
+      if (e.code !== 'auth/invalid-credential' && e.code !== 'auth/wrong-password') {
         setMensagem('Não foi possível confirmar a senha. Tente novamente.');
         return;
       }

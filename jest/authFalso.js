@@ -1,24 +1,23 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 
-import { gerarId } from './bancoLocal';
+import { gerarId } from './firestoreFalso';
 
 /*
- * Contas locais no lugar do Firebase Authentication (por enquanto).
+ * Simulação do Firebase Authentication para os testes (jest.setup.js
+ * troca 'firebase/auth' por este arquivo). Foram as "contasLocais" do
+ * app enquanto os dados ficavam só no aparelho.
  *
  * Mesmos nomes de função e mesmos códigos de erro ('auth/...') de
- * 'firebase/auth', para as telas continuarem iguais.
- *
- * AsyncStorage: as contas (uid e e-mail) e a sessão aberta.
- * A senha nunca vai para o AsyncStorage: fica no SecureStore
- * (criptografado pelo sistema), só neste aparelho.
+ * 'firebase/auth'. Contas e sessão no AsyncStorage simulado; a senha
+ * no SecureStore simulado.
  */
 
-const CHAVE_CONTAS = '@conecta:contas';
-const CHAVE_SESSAO = '@conecta:sessao';
+const CHAVE_CONTAS = '@teste:contas';
+const CHAVE_SESSAO = '@teste:sessao';
 
 // Chaves do SecureStore aceitam apenas letras, números, ".", "-" e "_".
-const chaveSenha = (uid) => `conecta.senha.${uid}`;
+const chaveSenha = (uid) => `teste.senha.${uid}`;
 
 const EMAIL_VALIDO = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 const TAMANHO_MINIMO_SENHA = 6;
@@ -141,8 +140,6 @@ export async function signInWithEmailAndPassword(_auth, email, senha) {
 
   const conta = (await lerContas())[emailNormalizado];
 
-  // As contas ficam só neste aparelho: avisa quando o e-mail não tem
-  // conta aqui (ex.: conta criada quando o app usava o Firebase).
   if (!conta) {
     throw erroAuth('auth/user-not-found');
   }
@@ -174,8 +171,17 @@ export const EmailAuthProvider = {
   credential: (email, senha) => ({ email: normalizarEmail(email), senha }),
 };
 
+// Testes: simula o aparelho sem internet (o Firebase não responde).
+let semInternet = false;
+
+export function __simularSemInternet(valor) {
+  semInternet = valor;
+}
+
 export async function reauthenticateWithCredential(usuario, credencial) {
   await carregamento;
+
+  if (semInternet) throw erroAuth('auth/network-request-failed');
 
   if (!usuario?.uid || credencial?.email !== usuario.email) {
     throw erroAuth('auth/user-mismatch');
@@ -192,7 +198,7 @@ export async function reauthenticateWithCredential(usuario, credencial) {
   return { user: usuario };
 }
 
-// Sem servidor não há como enviar e-mail.
+// Simulação: não envia e-mail.
 export async function sendPasswordResetEmail(_auth, email) {
   if (!EMAIL_VALIDO.test(normalizarEmail(email))) {
     throw erroAuth('auth/invalid-email');

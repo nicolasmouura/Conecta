@@ -6,8 +6,8 @@ import {
   serverTimestamp,
   setDoc,
   where,
-} from '../armazenamento/bancoLocal';
-import { db } from '../config/armazenamento';
+} from 'firebase/firestore';
+import { db } from '../config/firebase';
 
 // Política de envio: economiza bateria, internet e gravações.
 export const INTERVALO_MINIMO_ENVIO = 15 * 1000; // nunca mais que 1 gravação a cada 15 s

@@ -16,14 +16,15 @@ import {
   createUserWithEmailAndPassword,
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
-} from '../armazenamento/contasLocais';
+} from 'firebase/auth';
 
-import { auth } from '../config/armazenamento';
+import { auth } from '../config/firebase';
 import {
   salvarPerfilUsuario,
   validarCadastro,
 } from '../dados/salvarUsuario';
 import { zerarFalhas } from '../dados/biometria';
+import { guardarSenhaOffline } from '../dados/senhaOffline';
 import { useVoltarAndroid } from '../navegacao/voltar';
 import { cores, fontes, raio } from '../theme/theme';
 
@@ -89,7 +90,12 @@ export default function AutenticacaoScreen({ onAutenticado, aviso }) {
           email: resultado.user.email,
         };
 
-        // A senha fica só no Firebase Authentication.
+        // A senha fica no Firebase Authentication; no aparelho, só o
+        // hash para encerrar o SOS sem internet.
+        await guardarSenhaOffline(usuario.uid, senha).catch((erroHash) =>
+          console.log('Hash da senha não guardado:', erroHash.message)
+        );
+
         await salvarPerfilUsuario({
           ...usuario,
           cpf,
@@ -111,6 +117,9 @@ export default function AutenticacaoScreen({ onAutenticado, aviso }) {
 
         // Senha correta: zera as falhas de biometria deste usuário.
         await zerarFalhas(resultado.user.uid).catch(() => {});
+        await guardarSenhaOffline(resultado.user.uid, senha).catch((erroHash) =>
+          console.log('Hash da senha não guardado:', erroHash.message)
+        );
 
         onAutenticado(resultado.user);
       }
@@ -135,7 +144,7 @@ export default function AutenticacaoScreen({ onAutenticado, aviso }) {
       ) {
         setErro('E-mail ou senha incorretos.');
       } else if (e.code === 'auth/user-not-found') {
-        setErro('Não há conta com este e-mail neste aparelho. Volte e toque em "Se cadastrar".');
+        setErro('Não há conta com este e-mail. Volte e toque em "Se cadastrar".');
       } else if (e.code === 'auth/too-many-requests') {
         setErro('Muitas tentativas. Aguarde alguns minutos e tente novamente.');
       } else if (e.code === 'auth/network-request-failed') {
@@ -166,8 +175,8 @@ export default function AutenticacaoScreen({ onAutenticado, aviso }) {
     } catch (e) {
       if (e.code === 'auth/invalid-email') {
         setErro('Digite um e-mail válido.');
-      } else if (e.code === 'auth/operation-not-allowed') {
-        setErro('Por enquanto os dados ficam só neste aparelho, então não é possível redefinir a senha por e-mail.');
+      } else if (e.code === 'auth/network-request-failed') {
+        setErro('Sem conexão. Verifique sua internet e tente novamente.');
       } else {
         setErro('Não foi possível enviar o e-mail. Tente novamente.');
       }

@@ -15,6 +15,7 @@ import { Feather } from '@expo/vector-icons';
 import MapView, { Marker } from 'react-native-maps';
 
 import {
+  buscarCEP,
   buscarEndereco,
   ehBrasil,
   ENDERECO_VAZIO,
@@ -25,6 +26,12 @@ import {
   validarEndereco,
 } from '../dados/enderecos';
 import { cores, fontes, raio } from '../theme/theme';
+
+const ERROS_CEP = {
+  'cep-invalido': 'CEP inválido. Confira os 8 números.',
+  'nao-encontrado': 'CEP não encontrado. Confira o número ou preencha o endereço à mão.',
+  'sem-conexao': 'Não foi possível buscar o CEP (sem internet?). Preencha o endereço à mão.',
+};
 
 const ZOOM_LUGAR = { latitudeDelta: 0.004, longitudeDelta: 0.004 };
 const ZOOM_CIDADE = { latitudeDelta: 0.05, longitudeDelta: 0.05 };
@@ -102,6 +109,10 @@ export default function EditarLugar({
   );
   const [ocupado, setOcupado] = useState(false);
   const [erro, setErro] = useState('');
+  const [buscandoCEP, setBuscandoCEP] = useState(false);
+
+  // Último CEP pedido: resposta de um CEP antigo (digitação rápida) é ignorada.
+  const cepPedido = useRef(null);
 
   const localizado = pino !== null && mesmoEndereco(campos, localizadoPara);
   const brasil = ehBrasil(campos.pais);
@@ -120,6 +131,53 @@ export default function EditarLugar({
       [chave]: chave === 'cep' && ehBrasil(atual.pais) ? formatarCEP(valor) : valor,
     }));
     setErro('');
+
+    if (chave === 'cep' && brasil) {
+      const cep = formatarCEP(valor);
+
+      if (cep.length === 9 && cep !== formatarCEP(campos.cep)) {
+        preencherPeloCEP(cep);
+      } else if (cep.length < 9) {
+        cepPedido.current = null;
+        setBuscandoCEP(false);
+      }
+    }
+  }
+
+  // CEP completo → Estado, Cidade, Bairro e Rua pela ViaCEP. O número
+  // continua com a pessoa; o que o CEP não traz não apaga o que já foi digitado.
+  async function preencherPeloCEP(cep) {
+    cepPedido.current = cep;
+    setBuscandoCEP(true);
+
+    const { endereco, erro: problema } = await buscarCEP(cep);
+
+    if (cepPedido.current !== cep) return;
+
+    cepPedido.current = null;
+    setBuscandoCEP(false);
+
+    if (problema) {
+      setErro(ERROS_CEP[problema]);
+      return;
+    }
+
+    // Mudou o país ou o CEP enquanto buscava: a resposta não vale mais.
+    setCampos((atual) => {
+      if (!ehBrasil(atual.pais) || formatarCEP(atual.cep) !== cep) return atual;
+
+      const novos = { ...atual };
+
+      for (const [chave, valor] of Object.entries(endereco)) {
+        if (valor) novos[chave] = valor;
+      }
+
+      return novos;
+    });
+
+    if (!endereco.rua) {
+      setErro('Esse CEP é da cidade toda: preencha bairro e rua.');
+    }
   }
 
   function centralizar(coordenadas) {
@@ -319,6 +377,24 @@ export default function EditarLugar({
             maxLength={40}
           />
 
+          <Campo
+            label="CEP"
+            value={campos.cep}
+            onChangeText={(valor) => alterar('cep', valor)}
+            placeholder={brasil ? '00000-000' : 'Código postal'}
+            keyboardType={brasil ? 'number-pad' : 'default'}
+            autoCapitalize="characters"
+            maxLength={brasil ? 9 : 10}
+          />
+
+          {brasil ? (
+            <Text style={styles.dicaCEP}>
+              {buscandoCEP
+                ? 'Buscando o endereço do CEP...'
+                : 'Digite o CEP para preencher estado, cidade, bairro e rua.'}
+            </Text>
+          ) : null}
+
           <View style={styles.linha}>
             <Campo
               label="Estado"
@@ -371,16 +447,6 @@ export default function EditarLugar({
             />
           </View>
 
-          <Campo
-            label="CEP"
-            value={campos.cep}
-            onChangeText={(valor) => alterar('cep', valor)}
-            placeholder={brasil ? '00000-000' : 'Código postal'}
-            keyboardType={brasil ? 'number-pad' : 'default'}
-            autoCapitalize="characters"
-            maxLength={brasil ? 9 : 10}
-          />
-
           <Text style={styles.privacidade}>
             {tipo.id === 'casa'
               ? 'Este também é o endereço do seu perfil, que a família vê. A posição no mapa é privada: a família vê apenas "Em casa" ou a distância aproximada até a casa.'
@@ -390,9 +456,9 @@ export default function EditarLugar({
           {erro ? <Text style={styles.erro}>{erro}</Text> : null}
 
           <TouchableOpacity
-            style={[styles.botao, ocupado && styles.botaoDesabilitado]}
+            style={[styles.botao, (ocupado || buscandoCEP) && styles.botaoDesabilitado]}
             onPress={localizado ? salvar : localizar}
-            disabled={ocupado}
+            disabled={ocupado || buscandoCEP}
           >
             {ocupado ? (
               <ActivityIndicator color={cores.textoSobrePrimaria} />
@@ -520,6 +586,12 @@ const styles = StyleSheet.create({
     fontSize: 15,
     backgroundColor: cores.superficie,
     color: cores.texto,
+  },
+
+  dicaCEP: {
+    fontSize: 12,
+    color: cores.textoSecundario,
+    marginTop: -4,
   },
 
   privacidade: {

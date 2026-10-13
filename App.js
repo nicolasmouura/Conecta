@@ -22,11 +22,11 @@ import {
 import {
   doc,
   getDoc,
-} from './src/armazenamento/bancoLocal';
+} from 'firebase/firestore';
 
-import { onAuthStateChanged, signOut } from './src/armazenamento/contasLocais';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
 
-import { auth, db } from './src/config/armazenamento';
+import { auth, db } from './src/config/firebase';
 
 import Menu from './Components/Menu';
 import TelaMapa from './src/mapa/TelaMapa';
@@ -38,6 +38,8 @@ import SOSScreen from './src/sos/SOSScreen';
 import AutenticacaoScreen from './src/autenticacao/AutenticacaoScreen';
 import VerificaBiometria from './src/biometria/VerificaBiometria';
 import { garantirEntradaDiretorio } from './src/dados/salvarUsuario';
+import { limparDadosAntigos } from './src/dados/limparDadosAntigos';
+import { apagarSenhaOffline } from './src/dados/senhaOffline';
 import GrupoScreen from './src/grupo/GrupoScreen';
 import { useCompartilharLocalizacao } from './src/mapa/compartilharLocalizacao';
 import { useVoltarAndroid } from './src/navegacao/voltar';
@@ -179,6 +181,13 @@ export default function App() {
   // Só a PRIMEIRA emissão (sessão restaurada ao abrir) é tratada aqui:
   // a sessão guardada fica travada até a biometria ser confirmada.
   // Login, cadastro e "Sair" continuam pelos fluxos das telas.
+  // Restos da fase "dados só no aparelho" (uma vez por abertura).
+  useEffect(() => {
+    limparDadosAntigos().catch((erro) =>
+      console.log('Dados locais antigos não apagados:', erro.message)
+    );
+  }, []);
+
   useEffect(() => {
     let primeira = true;
 
@@ -243,6 +252,10 @@ export default function App() {
   };
 
   function sairDoAplicativo() {
+    apagarSenhaOffline().catch((erro) =>
+      console.log('Hash da senha não apagado:', erro.message)
+    );
+
     setUsuario(null);
     setUsuarioPendente(null);
     setBloqueado(false);

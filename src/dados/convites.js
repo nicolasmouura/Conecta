@@ -9,9 +9,9 @@ import {
   updateDoc,
   where,
   writeBatch,
-} from '../armazenamento/bancoLocal';
+} from 'firebase/firestore';
 
-import { auth, db } from '../config/armazenamento';
+import { auth, db } from '../config/firebase';
 import { buscarGrupoPorId, garantirSemFamilia } from './grupo';
 import {
   chaveDiretorio,
