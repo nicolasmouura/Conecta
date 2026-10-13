@@ -70,6 +70,10 @@ export function arrayUnion(...valores) {
   return new ValorEspecial('arrayUnion', valores);
 }
 
+export function arrayRemove(...valores) {
+  return new ValorEspecial('arrayRemove', valores);
+}
+
 // update / set com merge: o campo some do documento.
 export function deleteField() {
   return new ValorEspecial('apagarCampo');
@@ -110,6 +114,10 @@ function resolver(valor, anterior, agora) {
     }
 
     const lista = Array.isArray(anterior) ? [...anterior] : [];
+
+    if (valor.tipo === 'arrayRemove') {
+      return lista.filter((existente) => !valor.valores.some((item) => iguais(existente, item)));
+    }
 
     for (const item of valor.valores) {
       if (!lista.some((existente) => iguais(existente, item))) {

@@ -13,6 +13,7 @@ import { Feather } from '@expo/vector-icons';
 
 import { biometriaDisponivel } from '../dados/biometria';
 import EditarInformacoes from './EditarInformacoes';
+import ExcluirConta from './ExcluirConta';
 import MeusLugares from '../lugares/MeusLugares';
 import BotaoVoltar from '../navegacao/BotaoVoltar';
 import EncerrarSOS from '../sos/EncerrarSOS';
@@ -34,6 +35,11 @@ const ITENS = [
     label: 'Segurança',
     icone: 'lock',
   },
+  {
+    chave: 'excluir',
+    label: 'Excluir conta',
+    icone: 'trash-2',
+  },
 ];
 
 export default function Configuracoes({
@@ -44,6 +50,7 @@ export default function Configuracoes({
   posicaoAtual,
   grupoId,
   onSair,
+  onContaExcluida,
 }) {
   const [editarAberto, setEditarAberto] =
     useState(false);
@@ -52,6 +59,9 @@ export default function Configuracoes({
     useState(false);
 
   const [segurancaAberta, setSegurancaAberta] =
+    useState(false);
+
+  const [excluirAberto, setExcluirAberto] =
     useState(false);
 
   // null = carregando
@@ -78,6 +88,11 @@ export default function Configuracoes({
 
     if (chave === 'seguranca') {
       abrirSeguranca();
+      return;
+    }
+
+    if (chave === 'excluir') {
+      setExcluirAberto(true);
     }
   }
 
@@ -103,6 +118,15 @@ export default function Configuracoes({
           onPress: onSair,
         },
       ]
+    );
+  }
+
+  if (excluirAberto) {
+    return (
+      <ExcluirConta
+        onVoltar={() => setExcluirAberto(false)}
+        onExcluida={onContaExcluida}
+      />
     );
   }
 

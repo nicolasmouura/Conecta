@@ -37,6 +37,7 @@ import SOSScreen from './src/sos/SOSScreen';
 
 import AutenticacaoScreen from './src/autenticacao/AutenticacaoScreen';
 import VerificaBiometria from './src/biometria/VerificaBiometria';
+import VerificarEmail from './src/autenticacao/VerificarEmail';
 import { garantirEntradaDiretorio, protegerDocumento } from './src/dados/salvarUsuario';
 import { limparDadosAntigos } from './src/dados/limparDadosAntigos';
 import { apagarSenhaOffline } from './src/dados/senhaOffline';
@@ -80,9 +81,16 @@ export default function App() {
   // "‹ Menu", que ficaria por cima do botão de fechar dela.
   const [telaCheia, setTelaCheia] = useState(false);
 
+  // E-mail confirmado: o app só abre depois disso (VerificarEmail).
+  // emailConfirmado marca a confirmação feita nesta sessão (o objeto
+  // do Firebase muda sem avisar o React).
+  const [emailConfirmado, setEmailConfirmado] = useState(false);
+  const emailOk =
+    emailConfirmado || auth.currentUser?.emailVerified === true;
+
   useEffect(() => {
     async function verificarGrupo() {
-      if (!usuario) {
+      if (!usuario || !emailOk) {
         return;
       }
 
@@ -184,7 +192,7 @@ export default function App() {
     }
 
     verificarGrupo();
-  }, [usuario]);
+  }, [usuario, emailOk]);
 
   // Só a PRIMEIRA emissão (sessão restaurada ao abrir) é tratada aqui:
   // a sessão guardada fica travada até a biometria ser confirmada.
@@ -260,6 +268,8 @@ export default function App() {
   };
 
   function sairDoAplicativo() {
+    setEmailConfirmado(false);
+
     apagarSenhaOffline().catch((erro) =>
       console.log('Hash da senha não apagado:', erro.message)
     );
@@ -355,6 +365,22 @@ export default function App() {
     );
   }
 
+  if (!emailOk) {
+    return (
+      <SafeAreaProvider>
+        <View style={styles.container}>
+          <VerificarEmail
+            email={auth.currentUser?.email || usuario.email}
+            onConfirmado={() => setEmailConfirmado(true)}
+            onSair={() => encerrarSessao('')}
+          />
+
+          <StatusBar style="auto" />
+        </View>
+      </SafeAreaProvider>
+    );
+  }
+
   if (verificandoGrupo || !perfil) {
     return (
       <SafeAreaProvider>
@@ -431,6 +457,13 @@ export default function App() {
 
           setTemGrupo(true);
         }}
+        onSaiu={() => {
+          // Sem família: volta para criar uma ou aceitar um convite.
+          setGrupoId(null);
+          setTemGrupo(false);
+          setPulouGrupo(false);
+          setTela('menu');
+        }}
       />
     );
   } else if (tela === 'perfil') {
@@ -441,6 +474,10 @@ export default function App() {
         grupoId={temGrupo ? grupoId : null}
         onTelaCheia={setTelaCheia}
         onSair={sairDoAplicativo}
+        onContaExcluida={() => {
+          sairDoAplicativo();
+          setAvisoLogin('Sua conta foi excluída.');
+        }}
         onPerfilAtualizado={({ nome }) =>
           setPerfil((atual) => ({
             ...atual,

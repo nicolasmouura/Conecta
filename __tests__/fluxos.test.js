@@ -1,6 +1,12 @@
 import { Alert } from 'react-native';
 import { act, configure, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
-import { auth, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
+import {
+  __confirmarEmail,
+  auth,
+  createUserWithEmailAndPassword,
+  reload,
+  signOut,
+} from 'firebase/auth';
 
 import App from '../App';
 import { salvarPerfilUsuario } from '../src/dados/salvarUsuario';
@@ -64,8 +70,10 @@ beforeAll(async () => {
   jest.spyOn(console, 'warn').mockImplementation(() => {});
   jest.spyOn(console, 'error').mockImplementation((...args) => erros.push(args));
 
-  // Bruno já tem conta (sem família), criada fora da tela.
+  // Bruno já tem conta (sem família, e-mail confirmado), criada fora da tela.
   const { user } = await createUserWithEmailAndPassword(auth, BRUNO.email, BRUNO.senha);
+  await __confirmarEmail(BRUNO.email);
+  await reload(user);
   await salvarPerfilUsuario({
     uid: user.uid,
     nome: BRUNO.nome,
@@ -100,6 +108,15 @@ async function sairDaConta() {
   await fireEvent.press(await screen.findByText('Sair do aplicativo'));
   await tocarNoAlerta('Sair');
   expect(await screen.findByText('Se cadastrar')).toBeTruthy();
+}
+
+// uid do Bruno (conta criada no beforeAll).
+async function brunoUid() {
+  const { collection, getDocs } = jest.requireMock('firebase/firestore');
+  const { db } = jest.requireMock('../src/config/firebase');
+  const perfis = await getDocs(collection(db, 'usuarios'));
+
+  return perfis.docs.find((perfil) => perfil.data().email === BRUNO.email).id;
 }
 
 async function entrar(pessoa) {
@@ -168,6 +185,11 @@ test('Ana cria a família e convida o Bruno; Bruno aceita pela tela', async () =
   await preencher('Sua senha', ANA.senha);
   await preencher('Digite a senha novamente', ANA.senha);
   await fireEvent.press(screen.getByText('Criar minha conta'));
+
+  // Confirma o e-mail pelo link e libera o app.
+  expect(await screen.findByText('Confirme seu e-mail')).toBeTruthy();
+  await __confirmarEmail(ANA.email);
+  await fireEvent.press(screen.getByText('Já confirmei'));
 
   await fireEvent.press(await screen.findByText('Criar família'));
   await preencher('Ex: Família Silva', 'Família Souza');
@@ -341,6 +363,86 @@ test('mapa e histórico com dados: posição da Ana pelo GPS e do Bruno no banco
   // O envio da posição gravou um ponto no histórico da Ana.
   await fireEvent.press(await screen.findByText('Histórico'));
   expect(await screen.findByText(/^1 ponto/)).toBeTruthy();
+
+  expect(erros).toEqual([]);
+});
+
+test('sair da família: a administradora sai e o Bruno assume', async () => {
+  const { doc, getDoc } = jest.requireMock('firebase/firestore');
+  const { db } = jest.requireMock('../src/config/firebase');
+
+  // Sessão da Ana (administradora) guardada do teste anterior.
+  await render(<App />);
+
+  await fireEvent.press(await screen.findByText('Minha Família'));
+  await fireEvent.press(await screen.findByText('Sair da família'));
+
+  const [titulo, mensagem] = Alert.alert.mock.calls.at(-1);
+  expect(titulo).toBe('Sair da família');
+  expect(mensagem).toMatch(/Bruno Lima Santos passa a ser o administrador/);
+
+  await tocarNoAlerta('Sair');
+
+  // Sem família: volta para criar uma ou aceitar convite.
+  expect(await screen.findByText('Criar família')).toBeTruthy();
+
+  const perfilAna = await getDoc(doc(db, 'usuarios', auth.currentUser.uid));
+  expect(perfilAna.data().grupoId).toBeUndefined();
+
+  const grupoId = (await getDoc(doc(db, 'usuarios', (await brunoUid())))).data().grupoId;
+  const grupo = await getDoc(doc(db, 'grupos', grupoId));
+  expect(grupo.data().membros).toEqual([await brunoUid()]);
+  expect(grupo.data().administradorUid).toBe(await brunoUid());
+
+  const registroBruno = await getDoc(doc(db, 'grupos', grupoId, 'membros', await brunoUid()));
+  expect(registroBruno.data().papel).toBe('administrador');
+
+  expect(erros).toEqual([]);
+});
+
+test('excluir conta: senha errada recusa; certa apaga tudo e a família', async () => {
+  const { collection, doc, getDoc, getDocs } = jest.requireMock('firebase/firestore');
+  const { db } = jest.requireMock('../src/config/firebase');
+
+  const uid = await brunoUid();
+  const { grupoId } = (await getDoc(doc(db, 'usuarios', uid))).data();
+
+  // Troca para o Bruno (último membro da família agora).
+  await signOut(auth);
+  await render(<App />);
+  await entrar(BRUNO);
+
+  await fireEvent.press(await screen.findByText('Meu Perfil'));
+  await fireEvent.press(await screen.findByText('Excluir conta'));
+
+  await fireEvent.press(screen.getByText('Excluir minha conta'));
+  expect(screen.getByText('Digite a senha da sua conta.')).toBeTruthy();
+
+  await preencher('Digite sua senha para confirmar', 'errada1');
+  await fireEvent.press(screen.getByText('Excluir minha conta'));
+  await tocarNoAlerta('Excluir');
+  expect(await screen.findByText('Senha incorreta.')).toBeTruthy();
+
+  await preencher('Digite sua senha para confirmar', BRUNO.senha);
+  await fireEvent.press(screen.getByText('Excluir minha conta'));
+  await tocarNoAlerta('Excluir');
+
+  // Volta para o login, com o aviso.
+  expect(await screen.findByText('Sua conta foi excluída.')).toBeTruthy();
+
+  // Nada do Bruno ficou no banco; a família (só ele) foi apagada.
+  expect((await getDoc(doc(db, 'usuarios', uid))).exists()).toBe(false);
+  expect((await getDoc(doc(db, 'usuarios', uid, 'privado', 'documentos'))).exists()).toBe(false);
+  expect((await getDoc(doc(db, 'familiares', uid))).exists()).toBe(false);
+  expect((await getDoc(doc(db, 'grupos', grupoId))).exists()).toBe(false);
+  expect((await getDocs(collection(db, 'usuarios', uid, 'lugares'))).empty).toBe(true);
+  expect((await getDocs(collection(db, 'historicoLocalizacoes', uid, 'pontos'))).empty).toBe(true);
+
+  // O login também: entrar de novo diz que não há conta.
+  await preencher('Seu e-mail', BRUNO.email);
+  await preencher('Sua senha', BRUNO.senha);
+  await fireEvent.press(screen.getAllByText('Entrar no app').at(-1));
+  expect(await screen.findByText(/Não há conta com este e-mail/)).toBeTruthy();
 
   expect(erros).toEqual([]);
 });

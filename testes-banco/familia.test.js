@@ -7,9 +7,11 @@ import {
   doc,
   getDoc,
   getDocs,
+  query,
   serverTimestamp,
   setDoc,
   updateDoc,
+  where,
   writeBatch,
 } from 'firebase/firestore';
 
@@ -24,7 +26,8 @@ import {
   salvarFotoPerfil,
   salvarPerfilUsuario,
 } from '../src/dados/salvarUsuario';
-import { buscarGrupoPorId, criarGrupo, observarMembros } from '../src/dados/grupo';
+import { buscarGrupoPorId, criarGrupo, observarMembros, sairDaFamilia } from '../src/dados/grupo';
+import { excluirConta } from '../src/dados/conta';
 import {
   aceitarConvite,
   enviarConvite,
@@ -82,6 +85,12 @@ const CASA_ANA = {
 };
 
 let grupo;
+
+// Últimas 24 h (pega todos os pontos registrados nos testes).
+const periodoAmplo = () => ({
+  inicio: new Date(Date.now() - 24 * 60 * 60 * 1000),
+  fim: new Date(Date.now() + 60 * 60 * 1000),
+});
 
 // Primeira emissão de um listener (onSnapshot) do app.
 function primeiraEmissao(observar) {
@@ -485,13 +494,18 @@ describe('7. histórico', () => {
     expect(meus.pontos[1].precisao).toBe(8);
 
     entrarComo(ANA);
-    const daFamilia = await buscarHistorico(BRUNO.uid, periodo());
+    // A família lê só os pontos registrados nela: filtra pelo grupo.
+    const daFamilia = await buscarHistorico(BRUNO.uid, periodo(), grupo.id);
     expect(daFamilia.pontos).toHaveLength(2);
+
+    // Sem o filtro da família, a consulta é recusada.
+    await assertFails(buscarHistorico(BRUNO.uid, periodo()));
   });
 
   test('Carlos não lê o histórico; ninguém grava no histórico de outro', async () => {
     entrarComo(CARLOS);
     await assertFails(buscarHistorico(BRUNO.uid, periodo()));
+    await assertFails(buscarHistorico(BRUNO.uid, periodo(), grupo.id));
 
     entrarComo(ANA);
     await assertFails(
@@ -503,13 +517,15 @@ describe('7. histórico', () => {
     );
   });
 
-  test('pontos do histórico não são alterados nem apagados', async () => {
-    const db = entrarComo(BRUNO);
+  test('pontos não são alterados; só o dono apaga (excluir conta)', async () => {
+    let db = entrarComo(BRUNO);
     const pontos = await getDocs(collection(db, 'historicoLocalizacoes', BRUNO.uid, 'pontos'));
-    const ponto = pontos.docs[0].ref;
+    const caminho = pontos.docs[0].ref.path;
 
-    await assertFails(updateDoc(ponto, { latitude: 0 }));
-    await assertFails(deleteDoc(ponto));
+    await assertFails(updateDoc(doc(db, caminho), { latitude: 0 }));
+
+    db = entrarComo(ANA);
+    await assertFails(deleteDoc(doc(db, caminho)));
   });
 });
 
@@ -587,8 +603,8 @@ describe('8. SOS', () => {
     expect(meu).toBeNull();
   });
 
-  test('alertas não são apagados', async () => {
-    const db = entrarComo(BRUNO);
+  test('só o autor apaga o próprio alerta (excluir conta)', async () => {
+    const db = entrarComo(ANA);
 
     await assertFails(deleteDoc(doc(db, 'alertasSOS', alertaId)));
   });
@@ -828,5 +844,270 @@ describe('12. campos de texto com limite', () => {
     await assertFails(montar('x'.repeat(5000), agora));
     await assertFails(montar(agora, 'x'.repeat(5000)));
     await assertSucceeds(montar(agora, agora));
+  });
+});
+
+const HUGO = { uid: 'hugo', email: 'hugo@teste.com', nome: 'Hugo Reis', telefone: '(21) 95555-4444' };
+
+// Convite pendente recebido pela pessoa logada (ou undefined).
+async function convitePendente(grupoId) {
+  const recebidos = await primeiraEmissao((ok, erro) => observarConvitesRecebidos(ok, erro));
+
+  return recebidos.find((convite) => convite.grupoId === grupoId);
+}
+
+describe('13. e-mail não confirmado', () => {
+  test('cadastra o perfil, mas fica fora do índice de convites', async () => {
+    entrarComo({ ...HUGO, verificado: false });
+
+    await salvarPerfilUsuario(HUGO);
+
+    const indice = await semRegras((db) =>
+      getDoc(doc(db, 'diretorioConvites', chaveDiretorio(HUGO.nome, HUGO.email)))
+    );
+    expect(indice.exists()).toBe(false);
+  });
+
+  test('não entra no índice, não cria família, não convida', async () => {
+    const db = entrarComo({ ...HUGO, verificado: false });
+
+    await assertFails(
+      setDoc(doc(db, 'diretorioConvites', chaveDiretorio(HUGO.nome, HUGO.email)), { uid: HUGO.uid })
+    );
+    await assertFails(criarGrupo('Família Reis', HUGO));
+  });
+
+  test('não aceita nem recusa convite', async () => {
+    entrarComo(ANA);
+    await enviarConvite({
+      grupo,
+      remetente: { uid: ANA.uid, nome: 'Ana Souza Lima' },
+      nome: CARLOS.nome,
+      email: CARLOS.email,
+    });
+
+    entrarComo({ ...CARLOS, verificado: false });
+    const convite = await convitePendente(grupo.id);
+
+    await assertFails(aceitarConvite(convite, CARLOS));
+    await assertFails(recusarConvite(convite, CARLOS));
+
+    // Confirmado: aceita (e a família fica com 3 membros).
+    entrarComo(CARLOS);
+    await aceitarConvite(convite, CARLOS);
+    expect((await buscarGrupoPorId(grupo.id)).membros).toEqual([ANA.uid, BRUNO.uid, CARLOS.uid]);
+  });
+
+  test('depois de confirmar, entra no índice ao abrir o app', async () => {
+    entrarComo(HUGO);
+
+    await garantirEntradaDiretorio(HUGO.uid);
+
+    const indice = await semRegras((db) =>
+      getDoc(doc(db, 'diretorioConvites', chaveDiretorio(HUGO.nome, HUGO.email)))
+    );
+    expect(indice.data()).toEqual({ uid: HUGO.uid });
+  });
+});
+
+describe('14. sair da família', () => {
+  let familiaLima;
+
+  test('com SOS ativo não sai', async () => {
+    entrarComo(BRUNO);
+
+    const { id } = await acionarSOS({ uid: BRUNO.uid, grupoId: grupo.id, nome: BRUNO.nome });
+
+    await expect(sairDaFamilia(BRUNO.uid)).rejects.toThrow('SOS_ATIVO');
+
+    await encerrarSOS(id);
+  });
+
+  test('ninguém tira outra pessoa da família (nem o administrador)', async () => {
+    let db = entrarComo(CARLOS);
+    await assertFails(updateDoc(doc(db, 'grupos', grupo.id), { membros: [ANA.uid, CARLOS.uid] }));
+
+    db = entrarComo(ANA);
+    await assertFails(updateDoc(doc(db, 'grupos', grupo.id), { membros: [ANA.uid, CARLOS.uid] }));
+    await assertFails(deleteDoc(doc(db, 'grupos', grupo.id, 'membros', BRUNO.uid)));
+  });
+
+  test('não dá para sair deixando a família no perfil', async () => {
+    const db = entrarComo(CARLOS);
+    const lote = writeBatch(db);
+
+    lote.update(doc(db, 'grupos', grupo.id), { membros: [ANA.uid, BRUNO.uid] });
+    lote.delete(doc(db, 'grupos', grupo.id, 'membros', CARLOS.uid));
+
+    await assertFails(lote.commit());
+  });
+
+  test('a administradora sai: o membro mais antigo (Bruno) assume', async () => {
+    entrarComo(ANA);
+
+    expect(await sairDaFamilia(ANA.uid)).toEqual({ familiaApagada: false, novoAdministrador: BRUNO.uid });
+
+    const [familia, registroBruno, registroAna, perfilAna] = await semRegras((db) =>
+      Promise.all([
+        getDoc(doc(db, 'grupos', grupo.id)),
+        getDoc(doc(db, 'grupos', grupo.id, 'membros', BRUNO.uid)),
+        getDoc(doc(db, 'grupos', grupo.id, 'membros', ANA.uid)),
+        getDoc(doc(db, 'usuarios', ANA.uid)),
+      ])
+    );
+
+    expect(familia.data()).toMatchObject({
+      administradorUid: BRUNO.uid,
+      membros: [BRUNO.uid, CARLOS.uid],
+    });
+    expect(registroBruno.data().papel).toBe('administrador');
+    expect(registroAna.exists()).toBe(false);
+    expect(perfilAna.data()).not.toHaveProperty('grupoId');
+  });
+
+  test('quem saiu não vê mais nada da família', async () => {
+    const db = entrarComo(ANA);
+
+    await assertFails(getDoc(doc(db, 'grupos', grupo.id)));
+    expect(await erroDoListener((ok, erro) => observarFamiliares(grupo.id, ok, erro))).toBe(
+      'permission-denied'
+    );
+    await assertFails(buscarHistorico(BRUNO.uid, periodoAmplo(), grupo.id));
+    await assertFails(buscarPerfil(BRUNO.uid));
+  });
+
+  test('não volta sozinha: só com um convite novo', async () => {
+    const db = entrarComo(ANA);
+    await assertFails(updateDoc(doc(db, 'usuarios', ANA.uid), { grupoId: grupo.id }));
+
+    // Bruno (agora administrador) convida de novo (o convite antigo era "aceito").
+    entrarComo(BRUNO);
+    await enviarConvite({ grupo, remetente: BRUNO, nome: 'Ana Souza Lima', email: ANA.email });
+
+    entrarComo(ANA);
+    await aceitarConvite(await convitePendente(grupo.id), { uid: ANA.uid, nome: 'Ana Souza Lima' });
+
+    expect((await buscarGrupoPorId(grupo.id)).membros).toEqual([BRUNO.uid, CARLOS.uid, ANA.uid]);
+    expect((await buscarHistorico(BRUNO.uid, periodoAmplo(), grupo.id)).pontos).toHaveLength(2);
+  });
+
+  test('o histórico fica com a família em que foi registrado', async () => {
+    // Bruno sai (Carlos é o mais antigo e assume) e cria outra família com o Hugo.
+    entrarComo(BRUNO);
+    expect((await sairDaFamilia(BRUNO.uid)).novoAdministrador).toBe(CARLOS.uid);
+
+    familiaLima = await criarGrupo('Família Lima', BRUNO);
+    await enviarConvite({ grupo: familiaLima, remetente: BRUNO, nome: HUGO.nome, email: HUGO.email });
+
+    entrarComo(HUGO);
+    await aceitarConvite(await convitePendente(familiaLima.id), HUGO);
+
+    // A família nova não vê os pontos da família antiga.
+    expect((await buscarHistorico(BRUNO.uid, periodoAmplo(), familiaLima.id)).pontos).toEqual([]);
+    await assertFails(buscarHistorico(BRUNO.uid, periodoAmplo()));
+
+    // E a família antiga também não vê mais nada do Bruno.
+    entrarComo(ANA);
+    await assertFails(buscarHistorico(BRUNO.uid, periodoAmplo(), grupo.id));
+  });
+
+  test('o último a sair apaga a família e cancela os convites pendentes', async () => {
+    entrarComo(BRUNO);
+    await enviarConvite({ grupo: familiaLima, remetente: BRUNO, nome: CARLOS.nome, email: CARLOS.email });
+
+    entrarComo(HUGO);
+    expect((await sairDaFamilia(HUGO.uid)).familiaApagada).toBe(false);
+
+    entrarComo(BRUNO);
+    expect(await sairDaFamilia(BRUNO.uid)).toEqual({ familiaApagada: true, novoAdministrador: null });
+
+    const [familia, convite] = await semRegras((db) =>
+      Promise.all([
+        getDoc(doc(db, 'grupos', familiaLima.id)),
+        getDoc(doc(db, 'convites', `${familiaLima.id}_${CARLOS.email}`)),
+      ])
+    );
+
+    expect(familia.exists()).toBe(false);
+    expect(convite.data().status).toBe('cancelado');
+
+    entrarComo(CARLOS);
+    expect(await convitePendente(familiaLima.id)).toBeUndefined();
+  });
+});
+
+describe('15. excluir conta', () => {
+  const contasApagadas = () => jest.requireMock('firebase/auth').contasApagadas;
+
+  async function existe(caminho) {
+    return semRegras(async (db) => (await getDoc(doc(db, caminho))).exists());
+  }
+
+  async function quantos(consulta) {
+    return semRegras(async (db) => (await getDocs(consulta(db))).size);
+  }
+
+  test('senha errada não apaga nada', async () => {
+    entrarComo(ANA);
+
+    await expect(excluirConta('errada')).rejects.toMatchObject({ code: 'auth/invalid-credential' });
+    expect(await existe(`usuarios/${ANA.uid}`)).toBe(true);
+    expect(contasApagadas()).toEqual([]);
+  });
+
+  test('ninguém apaga os dados de outra pessoa', async () => {
+    const db = entrarComo(CARLOS);
+
+    await assertFails(deleteDoc(doc(db, 'usuarios', ANA.uid)));
+    await assertFails(deleteDoc(doc(db, 'usuarios', ANA.uid, 'privado', 'documentos')));
+    await assertFails(deleteDoc(doc(db, 'usuarios', ANA.uid, 'lugares', 'casa')));
+  });
+
+  test('o perfil só sai fora da família, e o CPF só sai junto com o perfil', async () => {
+    const db = entrarComo(ANA);
+
+    await assertFails(deleteDoc(doc(db, 'usuarios', ANA.uid)));
+    await assertFails(deleteDoc(doc(db, 'usuarios', ANA.uid, 'privado', 'documentos')));
+  });
+
+  test('Ana exclui a conta: sai da família e tudo dela é apagado', async () => {
+    entrarComo(ANA);
+
+    await excluirConta('senha-certa');
+
+    expect(contasApagadas()).toEqual([ANA.uid]);
+    expect(await existe(`usuarios/${ANA.uid}`)).toBe(false);
+    expect(await existe(`usuarios/${ANA.uid}/privado/documentos`)).toBe(false);
+    expect(await existe(`usuarios/${ANA.uid}/lugares/casa`)).toBe(false);
+    expect(await existe(`familiares/${ANA.uid}`)).toBe(false);
+    expect(await existe(`grupos/${grupo.id}/membros/${ANA.uid}`)).toBe(false);
+    expect(await existe(`diretorioConvites/${chaveDiretorio('Ana Souza Lima', ANA.email)}`)).toBe(false);
+    expect(await quantos((db) => query(collection(db, 'convites'), where('deUid', '==', ANA.uid)))).toBe(0);
+    expect(await quantos((db) => query(collection(db, 'convites'), where('paraEmail', '==', ANA.email)))).toBe(0);
+
+    // A família continua, sem ela.
+    const familia = await semRegras((db) => getDoc(doc(db, 'grupos', grupo.id)));
+    expect(familia.data().membros).toEqual([CARLOS.uid]);
+  });
+
+  test('Bruno exclui a conta: histórico e alertas de SOS também saem', async () => {
+    expect(await quantos((db) => collection(db, 'historicoLocalizacoes', BRUNO.uid, 'pontos'))).toBe(2);
+    expect(await quantos((db) => query(collection(db, 'alertasSOS'), where('uid', '==', BRUNO.uid)))).toBe(2);
+
+    entrarComo(BRUNO);
+    await excluirConta('senha-certa');
+
+    expect(await quantos((db) => collection(db, 'historicoLocalizacoes', BRUNO.uid, 'pontos'))).toBe(0);
+    expect(await quantos((db) => query(collection(db, 'alertasSOS'), where('uid', '==', BRUNO.uid)))).toBe(0);
+    expect(await quantos((db) => query(collection(db, 'convites'), where('deUid', '==', BRUNO.uid)))).toBe(0);
+    expect(await existe(`usuarios/${BRUNO.uid}`)).toBe(false);
+  });
+
+  test('o último membro exclui a conta: a família é apagada', async () => {
+    entrarComo(CARLOS);
+    await excluirConta('senha-certa');
+
+    expect(await existe(`grupos/${grupo.id}`)).toBe(false);
+    expect(contasApagadas()).toEqual([ANA.uid, BRUNO.uid, CARLOS.uid]);
   });
 });

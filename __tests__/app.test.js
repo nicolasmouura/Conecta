@@ -1,6 +1,7 @@
 import { Alert } from 'react-native';
 import { act, configure, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import * as SecureStore from 'expo-secure-store';
+import { __confirmarEmail, __emailsDeConfirmacao } from 'firebase/auth';
 
 import App from '../App';
 
@@ -99,6 +100,22 @@ test('cadastro → família → todas as telas do menu → sair, sem quebrar', a
   await preencher('Sua senha', 'senha123');
   await preencher('Digite a senha novamente', 'senha123');
   await fireEvent.press(screen.getByText('Criar minha conta'));
+
+  // E-mail de confirmação: o app só abre depois do link.
+  expect(await screen.findByText('Confirme seu e-mail')).toBeTruthy();
+  expect(__emailsDeConfirmacao).toContain('ana@teste.com');
+
+  await fireEvent.press(screen.getByText('Já confirmei'));
+  expect(await screen.findByText(/Ainda não recebemos a confirmação/)).toBeTruthy();
+
+  // Reenviar: manda de novo e espera 60 s para o próximo.
+  await fireEvent.press(screen.getByText('Reenviar e-mail'));
+  expect(await screen.findByText(/E-mail enviado/)).toBeTruthy();
+  expect(screen.getByText(/Reenviar e-mail \(\d+ s\)/)).toBeTruthy();
+  expect(__emailsDeConfirmacao.filter((email) => email === 'ana@teste.com')).toHaveLength(2);
+
+  await __confirmarEmail('ana@teste.com');
+  await fireEvent.press(screen.getByText('Já confirmei'));
 
   // Biometria simulada aprova → ainda sem família.
   await fireEvent.press(await screen.findByText('Criar família'));

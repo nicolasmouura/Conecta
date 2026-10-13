@@ -110,13 +110,10 @@ export async function enviarConvite({ grupo, remetente, nome, email }) {
     if (status === 'pendente') {
       throw new Error('CONVITE_JA_PENDENTE');
     }
-
-    if (status === 'aceito') {
-      throw new Error('JA_E_MEMBRO');
-    }
   }
 
-  // Um convite recusado pode ser reenviado (sobrescreve o anterior).
+  // Recusado, cancelado ou aceito por quem depois saiu da família (já
+  // conferido acima que não é membro): reenvia, sobrescrevendo o anterior.
   await setDoc(referencia, {
     grupoId: grupo.id,
     grupoNome: grupoAtual?.nome ?? grupo.nome,

@@ -90,8 +90,18 @@ function referenciaDiretorio(chave) {
   return doc(db, 'diretorioConvites', chave);
 }
 
+// O índice só aceita e-mail confirmado (firestore.rules): sem isso,
+// alguém poderia "ocupar" o e-mail de outra pessoa e receber os
+// convites dela. Antes de confirmar, a entrada fica para depois
+// (garantirEntradaDiretorio, ao liberar o app).
+function emailConfirmado() {
+  return auth.currentUser?.emailVerified === true;
+}
+
 // Adiciona ao lote a entrada do próprio usuário no índice (se faltar).
 async function incluirNoDiretorio(lote, uid, nome, email) {
+  if (!emailConfirmado()) return;
+
   const chave = chaveDiretorio(nome, email);
 
   if (!chave) return;
@@ -402,7 +412,8 @@ export async function atualizarPerfil(uid, dados) {
    * ("Convidado por"). As duas cópias mudam juntas.
    */
   // Nome novo → chave nova no índice de convites (a antiga sai).
-  const emailSessao = auth.currentUser?.uid === uid ? auth.currentUser.email : null;
+  const emailSessao =
+    auth.currentUser?.uid === uid && emailConfirmado() ? auth.currentUser.email : null;
   const chaveAntiga = emailSessao && dadosAtuais.nome ? chaveDiretorio(dadosAtuais.nome, emailSessao) : null;
   const chaveNova = emailSessao ? chaveDiretorio(perfil.nome, emailSessao) : null;
 

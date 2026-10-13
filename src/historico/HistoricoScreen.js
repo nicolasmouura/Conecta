@@ -65,7 +65,10 @@ export default function HistoricoScreen({ usuario, grupoId }) {
     setCarregando(true);
     setErro('');
 
-    buscarHistorico(selecionado, calcularPeriodo(periodo))
+    // De outro membro: só os pontos registrados nesta família.
+    const familia = selecionado === usuario?.uid ? null : grupoId;
+
+    buscarHistorico(selecionado, calcularPeriodo(periodo), familia)
       .then((resultado) => {
         if (ativo) setHistorico(resultado);
       })
@@ -84,7 +87,7 @@ export default function HistoricoScreen({ usuario, grupoId }) {
     return () => {
       ativo = false;
     };
-  }, [selecionado, periodo]);
+  }, [selecionado, periodo, grupoId, usuario?.uid]);
 
   const opcoes = [
     { uid: usuario?.uid, nome: 'Você' },

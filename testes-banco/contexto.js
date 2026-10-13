@@ -46,9 +46,14 @@ export async function encerrarBanco() {
 }
 
 // Pessoa logada (uid + e-mail no token, como o Firebase Auth faz).
+// E-mail confirmado, a não ser que pessoa.verificado seja false.
 export function entrarComo(pessoa) {
-  estado.db = ambiente.authenticatedContext(pessoa.uid, { email: pessoa.email }).firestore();
-  estado.auth.currentUser = { uid: pessoa.uid, email: pessoa.email };
+  const emailVerified = pessoa.verificado !== false;
+
+  estado.db = ambiente
+    .authenticatedContext(pessoa.uid, { email: pessoa.email, email_verified: emailVerified })
+    .firestore();
+  estado.auth.currentUser = { uid: pessoa.uid, email: pessoa.email, emailVerified };
 
   return estado.db;
 }

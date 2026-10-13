@@ -86,10 +86,16 @@ export function calcularPeriodo(chave, agora = new Date()) {
 /*
  * Consulta única (sem listener). Busca os pontos mais recentes do
  * período, limitados, e devolve em ordem cronológica.
+ *
+ * grupoId: para ver o histórico de OUTRO membro. A família só lê os
+ * pontos registrados nela (firestore.rules), então a consulta precisa
+ * filtrar por ela (índice em firestore.indexes.json). O próprio
+ * histórico vem completo (sem grupoId).
  */
-export async function buscarHistorico(uid, { inicio, fim }) {
+export async function buscarHistorico(uid, { inicio, fim }, grupoId = null) {
   const consulta = query(
     collection(db, 'historicoLocalizacoes', uid, 'pontos'),
+    ...(grupoId ? [where('grupoId', '==', grupoId)] : []),
     where('registradoEm', '>=', Timestamp.fromDate(inicio)),
     where('registradoEm', '<', Timestamp.fromDate(fim)),
     orderBy('registradoEm', 'desc'),

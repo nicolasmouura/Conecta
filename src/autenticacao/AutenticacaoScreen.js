@@ -14,6 +14,7 @@ import {
 
 import {
   createUserWithEmailAndPassword,
+  sendEmailVerification,
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
 } from 'firebase/auth';
@@ -89,6 +90,12 @@ export default function AutenticacaoScreen({ onAutenticado, aviso }) {
           nome: nome.trim(),
           email: resultado.user.email,
         };
+
+        // Link de confirmação do e-mail: o app só libera depois dele
+        // (VerificarEmail). Se o envio falhar, dá para reenviar lá.
+        await sendEmailVerification(resultado.user).catch((erroEnvio) =>
+          console.log('E-mail de confirmação não enviado:', erroEnvio.code || erroEnvio.message)
+        );
 
         // A senha fica no Firebase Authentication; no aparelho, só o
         // hash para encerrar o SOS sem internet.

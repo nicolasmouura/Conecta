@@ -35,6 +35,7 @@ import {
 export default function PerfilScreen({
   usuario,
   onSair,
+  onContaExcluida,
   onPerfilAtualizado,
   posicaoAtual,
   grupoId,
@@ -337,6 +338,7 @@ export default function PerfilScreen({
             onSair={
               sairDoAplicativo
             }
+            onContaExcluida={onContaExcluida}
           />
         </View>
       </ScrollView>

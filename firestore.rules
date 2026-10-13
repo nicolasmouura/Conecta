@@ -23,6 +23,13 @@ service cloud.firestore {
       return request.auth.token.email.lower();
     }
 
+    // E-mail confirmado pelo link do Firebase (o app pede no cadastro).
+    // Sem isso, alguém poderia criar conta com o e-mail de outra pessoa
+    // e receber os convites destinados a ela.
+    function emailVerificado() {
+      return request.auth.token.email_verified == true;
+    }
+
     function caminhoUsuario(uid) {
       return /databases/$(database)/documents/usuarios/$(uid);
     }
@@ -110,14 +117,19 @@ service cloud.firestore {
       return grupoId is string && ehMembro(grupoId);
     }
 
-    // O grupoId do perfil só pode mudar de "vazio" para
-    // uma família da qual o usuário realmente é membro.
+    // O grupoId do perfil só muda de "vazio" para uma família da qual
+    // o usuário realmente é membro, ou de volta para "vazio" quando
+    // ele sai (deixa de estar em "membros" ou a família é apagada).
     function vinculoDeFamiliaValido(grupoAnterior) {
       let novoGrupo = request.resource.data.get('grupoId', null);
       return novoGrupo == grupoAnterior
         || (grupoAnterior == null
             && novoGrupo is string
-            && ehMembroDepois(novoGrupo));
+            && ehMembroDepois(novoGrupo))
+        || (grupoAnterior is string
+            && novoGrupo == null
+            && (!existsAfter(caminhoGrupo(grupoAnterior))
+                || !(meuUid() in getAfter(caminhoGrupo(grupoAnterior)).data.membros)));
     }
 
     // Última localização conhecida (familiares/{uid}).
@@ -276,6 +288,7 @@ service cloud.firestore {
     function conviteNovoValido(conviteId) {
       let dados = request.resource.data;
       return autenticado()
+        && emailVerificado()
         && dados.keys().hasOnly(['grupoId', 'grupoNome', 'deUid', 'deNome', 'paraEmail', 'paraNome', 'paraUid', 'status', 'criadoEm'])
         && convidadoValido(dados)
         && dados.deUid == meuUid()
@@ -291,9 +304,57 @@ service cloud.firestore {
         && dados.deNome == get(caminhoMembro(dados.grupoId, meuUid())).data.nome;
     }
 
+    // Último membro saindo: os convites pendentes da família são
+    // cancelados no mesmo lote (a família vai deixar de existir).
+    function cancelamentoDeConviteValido() {
+      return autenticado()
+        && resource.data.status == 'pendente'
+        && ehMembro(resource.data.grupoId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'respondidoEm'])
+        && request.resource.data.status == 'cancelado'
+        && textoObrigatorio(request.resource.data.respondidoEm, 40);
+    }
+
+    // Entrar: a única alteração permitida é o próprio usuário
+    // se adicionar em "membros", e somente se existir um convite
+    // PENDENTE para o e-mail dele que vira ACEITO no mesmo lote.
+    // nome, administradorUid e demais campos não podem mudar.
+    function entradaNaFamiliaValida(grupoId) {
+      return autenticado()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['membros'])
+        && !(meuUid() in resource.data.membros)
+        && request.resource.data.membros.hasAll(resource.data.membros)
+        && request.resource.data.membros.size() == resource.data.membros.size() + 1
+        && meuUid() in request.resource.data.membros
+        && semFamilia()
+        && get(caminhoMeuConvite(grupoId)).data.status == 'pendente'
+        && getAfter(caminhoMeuConvite(grupoId)).data.status == 'aceito'
+        && getAfter(caminhoUsuario(meuUid())).data.get('grupoId', null) == grupoId
+        && existsAfter(caminhoMembro(grupoId, meuUid()));
+    }
+
+    // Sair (com outros membros ficando): só o próprio uid sai de
+    // "membros". Se quem sai é o administrador, o papel passa para
+    // um dos que ficam; senão, o administrador não muda. O perfil
+    // e o registro do membro mudam no mesmo lote.
+    function saidaDaFamiliaValida(grupoId) {
+      let novos = request.resource.data.membros;
+      return autenticado()
+        && meuUid() in resource.data.membros
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['membros', 'administradorUid'])
+        && novos == resource.data.membros.removeAll([meuUid()])
+        && novos.size() > 0
+        && (resource.data.administradorUid == meuUid()
+            ? request.resource.data.administradorUid in novos
+            : request.resource.data.administradorUid == resource.data.administradorUid)
+        && getAfter(caminhoUsuario(meuUid())).data.get('grupoId', null) == null
+        && !existsAfter(caminhoMembro(grupoId, meuUid()));
+    }
+
     function respostaDeConviteValida() {
       let dados = request.resource.data;
       return autenticado()
+        && emailVerificado()
         && resource.data.status == 'pendente'
         && resource.data.paraEmail == meuEmail()
         && resource.data.paraUid == meuUid()
@@ -335,10 +396,14 @@ service cloud.firestore {
         && documentoSoSaiParaAreaPrivada(userId)
         && vinculoDeFamiliaValido(resource.data.get('grupoId', null));
 
-      allow delete: if false;
+      // Excluir a conta: só o dono, e depois de sair da família.
+      allow delete: if autenticado()
+        && meuUid() == userId
+        && resource.data.get('grupoId', null) == null;
 
       // Dados sensíveis (CPF): SÓ o dono lê; a família não.
-      // O CPF é gravado uma única vez e nunca muda nem é apagado.
+      // O CPF é gravado uma única vez e nunca muda. Só é apagado junto
+      // com o perfil (excluir a conta), para não dar para trocá-lo.
       // Conta antiga: tem que ser o mesmo CPF que estava no perfil.
       match /privado/{documentoId} {
         allow read: if autenticado() && meuUid() == userId;
@@ -351,7 +416,11 @@ service cloud.firestore {
           && (!exists(caminhoUsuario(userId))
               || get(caminhoUsuario(userId)).data.get('documento', request.resource.data.cpf) == request.resource.data.cpf);
 
-        allow update, delete: if false;
+        allow update: if false;
+
+        allow delete: if autenticado()
+          && meuUid() == userId
+          && !existsAfter(caminhoUsuario(userId));
       }
 
       match /conquistas/{conquistaId} {
@@ -378,6 +447,7 @@ service cloud.firestore {
       // Criar: o criador é o administrador e o único membro,
       // não pode já ter família e o perfil é vinculado no mesmo lote.
       allow create: if autenticado()
+        && emailVerificado()
         && request.resource.data.keys().hasOnly(['nome', 'administradorUid', 'membros', 'criadoEm'])
         && nomeValido(request.resource.data.nome)
         && textoObrigatorio(request.resource.data.criadoEm, 40)
@@ -387,23 +457,15 @@ service cloud.firestore {
         && getAfter(caminhoUsuario(meuUid())).data.get('grupoId', null) == grupoId
         && existsAfter(caminhoMembro(grupoId, meuUid()));
 
-      // Entrar: a única alteração permitida é o próprio usuário
-      // se adicionar em "membros", e somente se existir um convite
-      // PENDENTE para o e-mail dele que vira ACEITO no mesmo lote.
-      // nome, administradorUid e demais campos não podem mudar.
-      allow update: if autenticado()
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['membros'])
-        && !(meuUid() in resource.data.membros)
-        && request.resource.data.membros.hasAll(resource.data.membros)
-        && request.resource.data.membros.size() == resource.data.membros.size() + 1
-        && meuUid() in request.resource.data.membros
-        && semFamilia()
-        && get(caminhoMeuConvite(grupoId)).data.status == 'pendente'
-        && getAfter(caminhoMeuConvite(grupoId)).data.status == 'aceito'
-        && getAfter(caminhoUsuario(meuUid())).data.get('grupoId', null) == grupoId
-        && existsAfter(caminhoMembro(grupoId, meuUid()));
+      // Entrar por convite ou sair (funções entradaNaFamiliaValida
+      // e saidaDaFamiliaValida, acima).
+      allow update: if entradaNaFamiliaValida(grupoId) || saidaDaFamiliaValida(grupoId);
 
-      allow delete: if false;
+      // O último membro, ao sair, apaga a família.
+      allow delete: if autenticado()
+        && resource.data.membros == [meuUid()]
+        && !existsAfter(caminhoMembro(grupoId, meuUid()))
+        && getAfter(caminhoUsuario(meuUid())).data.get('grupoId', null) == null;
 
       match /membros/{membroUid} {
         allow read: if ehMembro(grupoId);
@@ -427,14 +489,27 @@ service cloud.firestore {
 
         // O próprio membro só pode sincronizar a cópia do nome
         // com usuarios/{uid}, na mesma gravação do perfil.
-        // papel, status, uid e demais campos não mudam.
-        allow update: if autenticado()
-          && membroUid == meuUid()
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nome'])
-          && nomeValido(request.resource.data.nome)
-          && request.resource.data.nome == getAfter(caminhoUsuario(meuUid())).data.nome;
+        // A outra mudança é o administrador que sai passar o papel
+        // para quem ele indicou em administradorUid (mesmo lote).
+        // status, uid e demais campos não mudam.
+        allow update: if autenticado() && (
+          (membroUid == meuUid()
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nome'])
+            && nomeValido(request.resource.data.nome)
+            && request.resource.data.nome == getAfter(caminhoUsuario(meuUid())).data.nome)
+          || (membroUid != meuUid()
+            && get(caminhoGrupo(grupoId)).data.administradorUid == meuUid()
+            && getAfter(caminhoGrupo(grupoId)).data.administradorUid == membroUid
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['papel'])
+            && request.resource.data.papel == 'administrador')
+        );
 
-        allow delete: if false;
+        // Sair da família: o próprio registro sai junto com o uid
+        // de "membros" (ou com a família inteira, se era o último).
+        allow delete: if autenticado()
+          && membroUid == meuUid()
+          && (!existsAfter(caminhoGrupo(grupoId))
+              || !(meuUid() in getAfter(caminhoGrupo(grupoId)).data.membros));
       }
     }
 
@@ -455,11 +530,18 @@ service cloud.firestore {
 
       allow create: if conviteNovoValido(conviteId);
 
-      // Reenviar um convite recusado, ou o convidado responder.
-      allow update: if (resource.data.status == 'recusado' && conviteNovoValido(conviteId))
-        || respostaDeConviteValida();
+      // Reenviar (recusado, cancelado ou de quem já saiu da família:
+      // conviteNovoValido exige que a pessoa não seja membro), o
+      // convidado responder, ou um membro cancelar (último a sair).
+      allow update: if (resource.data.status in ['recusado', 'cancelado', 'aceito'] && conviteNovoValido(conviteId))
+        || respostaDeConviteValida()
+        || cancelamentoDeConviteValido();
 
-      allow delete: if false;
+      // Excluir a conta: quem convidou ou quem foi convidado apaga.
+      allow delete: if autenticado()
+        && (resource.data.deUid == meuUid()
+            || resource.data.get('paraUid', null) == meuUid()
+            || resource.data.paraEmail == meuEmail());
     }
 
     // ---------------------------------------------------
@@ -476,35 +558,39 @@ service cloud.firestore {
     }
 
     // ---------------------------------------------------
-    // HISTÓRICO DE LOCALIZAÇÕES: o dono e os membros da
-    // família atual do dono leem; só o dono cria; pontos
-    // nunca são alterados nem apagados pelo app.
-    // (Hoje não existe "sair da família". Quando existir,
-    // revisar a leitura para considerar o grupoId de cada ponto.)
+    // HISTÓRICO DE LOCALIZAÇÕES: o dono lê tudo; a família
+    // atual do dono lê só os pontos registrados NESSA família
+    // (quem sai leva o passado junto; uma família nova não vê
+    // por onde a pessoa andou antes). Só o dono cria e apaga
+    // (excluir a conta); pontos nunca são alterados.
     // ---------------------------------------------------
 
     match /historicoLocalizacoes/{userId}/pontos/{pontoId} {
       allow read: if autenticado()
-        && (meuUid() == userId || ehMembro(grupoDoUsuario(userId)));
+        && (meuUid() == userId
+            || (resource.data.grupoId == grupoDoUsuario(userId)
+                && ehMembro(resource.data.grupoId)));
 
       allow create: if pontoHistoricoValido(userId);
 
-      allow update, delete: if false;
+      allow update: if false;
+      allow delete: if autenticado() && meuUid() == userId;
     }
 
     // ---------------------------------------------------
-    // ALERTAS SOS: membros da família do alerta leem;
-    // só o autor cria e encerra; ninguém apaga.
+    // ALERTAS SOS: membros da família do alerta e o autor
+    // leem; só o autor cria, encerra e apaga (excluir a conta).
     // ---------------------------------------------------
 
     match /alertasSOS/{alertaId} {
-      allow read: if ehMembro(resource.data.grupoId);
+      allow read: if ehMembro(resource.data.grupoId)
+        || (autenticado() && resource.data.uid == meuUid());
 
       allow create: if sosNovoValido();
 
       allow update: if encerramentoSOSValido();
 
-      allow delete: if false;
+      allow delete: if autenticado() && resource.data.uid == meuUid();
     }
 
     // ---------------------------------------------------
@@ -519,6 +605,7 @@ service cloud.firestore {
       allow list: if false;
 
       allow create: if autenticado()
+        && emailVerificado()
         && request.resource.data.keys().hasOnly(['uid'])
         && request.resource.data.uid == meuUid()
         && chave == nomeNormalizado(getAfter(caminhoUsuario(meuUid())).data.nome) + '|' + meuEmail();

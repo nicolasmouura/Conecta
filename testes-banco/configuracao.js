@@ -6,6 +6,24 @@
 
 jest.mock('../src/config/firebase', () => require('./contexto').config);
 
+// Login: só o que a exclusão de conta usa. A senha certa é SENHA_CERTA.
+jest.mock('firebase/auth', () => {
+  const erro = (codigo) => Object.assign(new Error(codigo), { code: codigo });
+
+  return {
+    SENHA_CERTA: 'senha-certa',
+    contasApagadas: [],
+    EmailAuthProvider: { credential: (email, senha) => ({ email, senha }) },
+    reauthenticateWithCredential: async (usuario, credencial) => {
+      if (credencial.senha !== 'senha-certa') throw erro('auth/invalid-credential');
+      return { user: usuario };
+    },
+    deleteUser: async (usuario) => {
+      jest.requireMock('firebase/auth').contasApagadas.push(usuario.uid);
+    },
+  };
+});
+
 jest.mock('@react-native-async-storage/async-storage', () =>
   require('@react-native-async-storage/async-storage/jest/async-storage-mock')
 );

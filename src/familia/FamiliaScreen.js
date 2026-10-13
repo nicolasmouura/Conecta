@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 
 import {
   ActivityIndicator,
+  Alert,
   StyleSheet,
   Text,
   View,
@@ -16,6 +17,7 @@ import {
   buscarGrupoPorId,
   garantirRegistroMembro,
   observarMembros,
+  sairDaFamilia,
 } from '../dados/grupo';
 
 import { observarConvitesPendentesDoGrupo } from '../dados/convites';
@@ -28,6 +30,7 @@ export default function FamiliaScreen({
   grupoId,
   usuario,
   onGrupoConcluido,
+  onSaiu,
 }) {
   // Título abaixo do "‹ Menu" (que acompanha a área segura).
   const espacoTopo = useEspacoTopo(60);
@@ -37,6 +40,7 @@ export default function FamiliaScreen({
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState('');
   const [mostrarConvite, setMostrarConvite] = useState(false);
+  const [saindo, setSaindo] = useState(false);
 
   // Perfis (usuarios/{uid}) dos membros, indexados por uid
   const [perfis, setPerfis] = useState({});
@@ -157,6 +161,46 @@ export default function FamiliaScreen({
     (membro) => membro.uid === usuario.uid
   );
 
+  async function sair() {
+    try {
+      setSaindo(true);
+
+      await sairDaFamilia(usuario.uid);
+
+      onSaiu?.();
+    } catch (e) {
+      console.log('Não saiu da família:', e.code || e.message);
+      setSaindo(false);
+
+      Alert.alert(
+        'Não foi possível sair',
+        e.message === 'SOS_ATIVO'
+          ? 'Você tem um SOS ativo. Encerre-o antes de sair da família (Meu Perfil → Configurações → Segurança).'
+          : 'Tente novamente em instantes.'
+      );
+    }
+  }
+
+  // Quem assume se eu (administrador) sair: o membro mais antigo.
+  function confirmarSaida() {
+    const outros = membros
+      .filter((membro) => membro.uid !== usuario.uid)
+      .sort((a, b) => ((a.entrouEm || '') < (b.entrouEm || '') ? -1 : 1));
+
+    let mensagem = 'Você deixa de ver a família no mapa e ela deixa de ver você.';
+
+    if (outros.length === 0) {
+      mensagem = 'Você é o único membro: a família será apagada.';
+    } else if (grupoInfo?.administradorUid === usuario.uid) {
+      mensagem += ` ${outros[0].nome || 'O membro mais antigo'} passa a ser o administrador.`;
+    }
+
+    Alert.alert('Sair da família', mensagem, [
+      { text: 'Cancelar', style: 'cancel' },
+      { text: 'Sair', style: 'destructive', onPress: sair },
+    ]);
+  }
+
   const lista = [
     ...membros.map((membro) => ({
       ...membro,
@@ -198,6 +242,18 @@ export default function FamiliaScreen({
         <Text style={styles.botaoConvidarTexto}>
           + Convidar familiar
         </Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={styles.botaoSair}
+        onPress={confirmarSaida}
+        disabled={!meuRegistro || saindo}
+      >
+        {saindo ? (
+          <ActivityIndicator color={cores.erro} />
+        ) : (
+          <Text style={styles.botaoSairTexto}>Sair da família</Text>
+        )}
       </TouchableOpacity>
 
       {meuRegistro && (
@@ -269,6 +325,17 @@ const styles = StyleSheet.create({
   botaoConvidarTexto: {
     color: cores.textoSobrePrimaria,
     fontSize: 16,
+    fontFamily: fontes.destaque,
+  },
+  botaoSair: {
+    marginTop: -8,
+    marginBottom: 16,
+    padding: 8,
+    alignItems: 'center',
+  },
+  botaoSairTexto: {
+    color: cores.erro,
+    fontSize: 15,
     fontFamily: fontes.destaque,
   },
 });

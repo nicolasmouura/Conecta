@@ -36,11 +36,18 @@ function normalizarEmail(email) {
   return (email || '').trim().toLowerCase();
 }
 
+// Como o User do Firebase: emailVerified e getIdToken().
 function criarUsuario(conta) {
-  return { uid: conta.uid, email: conta.email, displayName: null };
+  return {
+    uid: conta.uid,
+    email: conta.email,
+    displayName: null,
+    emailVerified: conta.verificado === true,
+    getIdToken: async () => `token-${conta.uid}`,
+  };
 }
 
-// { [email]: { uid, email, criadaEm } }
+// { [email]: { uid, email, criadaEm, verificado } }
 async function lerContas() {
   const texto = await AsyncStorage.getItem(CHAVE_CONTAS);
 
@@ -196,6 +203,52 @@ export async function reauthenticateWithCredential(usuario, credencial) {
   }
 
   return { user: usuario };
+}
+
+// ---------- Confirmação de e-mail ----------
+
+// E-mails de confirmação "enviados" (os testes conferem).
+export const __emailsDeConfirmacao = [];
+
+export async function sendEmailVerification(usuario) {
+  if (semInternet) throw erroAuth('auth/network-request-failed');
+
+  __emailsDeConfirmacao.push(usuario.email);
+}
+
+// Testes: a pessoa tocou no link do e-mail.
+export async function __confirmarEmail(email) {
+  const contas = await lerContas();
+  const emailNormalizado = normalizarEmail(email);
+
+  contas[emailNormalizado] = { ...contas[emailNormalizado], verificado: true };
+  await AsyncStorage.setItem(CHAVE_CONTAS, JSON.stringify(contas));
+}
+
+// Atualiza o currentUser com o que está "no servidor" (ex.: e-mail confirmado).
+export async function reload(usuario) {
+  if (semInternet) throw erroAuth('auth/network-request-failed');
+
+  const conta = (await lerContas())[normalizarEmail(usuario.email)];
+
+  if (conta && auth.currentUser?.uid === conta.uid) {
+    auth.currentUser.emailVerified = conta.verificado === true;
+  }
+}
+
+// Apaga o login (e encerra a sessão), como o Firebase.
+export async function deleteUser(usuario) {
+  if (semInternet) throw erroAuth('auth/network-request-failed');
+
+  const contas = await lerContas();
+
+  delete contas[normalizarEmail(usuario.email)];
+  await AsyncStorage.setItem(CHAVE_CONTAS, JSON.stringify(contas));
+  await SecureStore.deleteItemAsync(chaveSenha(usuario.uid));
+  await AsyncStorage.removeItem(CHAVE_SESSAO);
+
+  auth.currentUser = null;
+  avisarOuvintes();
 }
 
 // Simulação: não envia e-mail.
