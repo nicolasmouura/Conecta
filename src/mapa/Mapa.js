@@ -36,66 +36,77 @@ function MarcadorCasa({ casa }) {
   );
 }
 
-const MARGEM_ENQUADRAMENTO = { top: 120, right: 60, bottom: 180, left: 60 };
+// Zoom ao abrir e ao tocar num card: nível de rua (bairro em volta).
+const ZOOM_PROXIMO = 16;
+const REGIAO_PROXIMA = { latitudeDelta: 0.01, longitudeDelta: 0.01 };
 
 // marcadores: um item por pessoa (montarMarcadores), já validados.
 // pronto: dados iniciais da família carregados.
 // foco: { uid, pedido } — centraliza no familiar tocado no card.
-export default function Mapa({ marcadores, pronto, selecionado, foco, onSelecionar, minhaCasa }) {
+// centroInicial: minha posição atual, para o mapa já abrir perto
+// (sem ela, abre na visão do mundo até os marcadores chegarem).
+export default function Mapa({
+  marcadores,
+  pronto,
+  selecionado,
+  foco,
+  onSelecionar,
+  minhaCasa,
+  centroInicial,
+}) {
   const mapaRef = useRef(null);
   const mapaPronto = useRef(false);
 
-  // Depois que o usuário mexe no mapa, não reenquadramos mais.
+  // Depois que o usuário mexe no mapa, não recentralizamos mais.
   const usuarioMoveu = useRef(false);
-  const ultimoEnquadramento = useRef('');
+  const ultimoAlvo = useRef('');
 
-  // Muda só quando alguém aparece ou some do mapa,
-  // não a cada movimento de um membro.
-  const pessoasVisiveis = marcadores
-    .map((marcador) => marcador.uid)
-    .sort()
-    .join(',');
+  // Ao abrir, centraliza em mim (perto, não a família toda, que pode
+  // estar longe). Sem a minha posição, no primeiro familiar do mapa.
+  const alvo = marcadores.find((marcador) => marcador.voce) || marcadores[0];
 
-  function enquadrar() {
+  // Guardado na primeira renderização: a posição muda a cada leitura
+  // do GPS e a região inicial não pode acompanhar.
+  const [regiaoInicial] = useState(() =>
+    centroInicial
+      ? {
+          latitude: centroInicial.latitude,
+          longitude: centroInicial.longitude,
+          ...REGIAO_PROXIMA,
+        }
+      : undefined
+  );
+
+  function centralizar() {
     if (
       !mapaRef.current ||
       !mapaPronto.current ||
       !pronto ||
       usuarioMoveu.current ||
-      !pessoasVisiveis ||
-      ultimoEnquadramento.current === pessoasVisiveis
+      !alvo ||
+      ultimoAlvo.current === alvo.uid
     ) {
       return;
     }
 
-    ultimoEnquadramento.current = pessoasVisiveis;
+    ultimoAlvo.current = alvo.uid;
 
-    const coordenadas = marcadores.map(({ latitude, longitude }) => ({
-      latitude,
-      longitude,
-    }));
+    const centro = { latitude: alvo.latitude, longitude: alvo.longitude };
 
     // Pequeno intervalo para o mapa aparecer antes da animação.
     setTimeout(() => {
       if (!mapaRef.current) return;
 
-      if (coordenadas.length === 1) {
-        mapaRef.current.animateCamera(
-          { center: coordenadas[0], zoom: 16, pitch: 0, heading: 0 },
-          { duration: 1000 }
-        );
-      } else {
-        mapaRef.current.fitToCoordinates(coordenadas, {
-          edgePadding: MARGEM_ENQUADRAMENTO,
-          animated: true,
-        });
-      }
+      mapaRef.current.animateCamera(
+        { center: centro, zoom: ZOOM_PROXIMO, pitch: 0, heading: 0 },
+        { duration: 1000 }
+      );
     }, 300);
   }
 
   useEffect(() => {
-    enquadrar();
-  }, [pronto, pessoasVisiveis]);
+    centralizar();
+  }, [pronto, alvo?.uid]);
 
   // Card tocado: centraliza nessa pessoa (e para o enquadramento automático).
   useEffect(() => {
@@ -108,7 +119,7 @@ export default function Mapa({ marcadores, pronto, selecionado, foco, onSelecion
     usuarioMoveu.current = true;
 
     mapaRef.current.animateCamera(
-      { center: { latitude: alvo.latitude, longitude: alvo.longitude }, zoom: 16 },
+      { center: { latitude: alvo.latitude, longitude: alvo.longitude }, zoom: ZOOM_PROXIMO },
       { duration: 700 }
     );
   }, [foco?.pedido]);
@@ -117,9 +128,10 @@ export default function Mapa({ marcadores, pronto, selecionado, foco, onSelecion
     <MapView
       ref={mapaRef}
       style={styles.map}
+      initialRegion={regiaoInicial}
       onMapReady={() => {
         mapaPronto.current = true;
-        enquadrar();
+        centralizar();
       }}
       onPanDrag={() => {
         usuarioMoveu.current = true;

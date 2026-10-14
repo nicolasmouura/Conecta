@@ -33,8 +33,11 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 
+  // Margem lateral em vez de centralizar: centralizado, cada card
+  // cresce até o tamanho do texto mais longo (ex.: endereço) e passa
+  // da tela. Assim o card fica com 90% da largura, como os botões.
   container: {
-    alignItems: 'center',
+    paddingHorizontal: '5%',
     paddingBottom: 20,
   },
 });

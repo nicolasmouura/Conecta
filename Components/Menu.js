@@ -58,6 +58,22 @@ const OPCOES = [
   },
 ];
 
+// Partículas que não contam como "segundo nome" (Maria da Silva → Maria Silva).
+const PARTICULAS = ['da', 'das', 'de', 'do', 'dos', 'e'];
+
+// Saudação: só o primeiro e o segundo nome, não o nome completo.
+function nomeCurto(nome) {
+  const partes = (nome || '').trim().split(/\s+/).filter(Boolean);
+
+  if (partes.length === 0) return '';
+
+  const segundo = partes
+    .slice(1)
+    .find((parte) => !PARTICULAS.includes(parte.toLowerCase()));
+
+  return segundo ? `${partes[0]} ${segundo}` : partes[0];
+}
+
 // Intervalo mínimo entre dois avisos de "Estou bem".
 const ESPERA_ESTOU_BEM = 30 * 1000;
 
@@ -128,7 +144,7 @@ export default function Menu({
         <View style={styles.cabecalho}>
           <View>
             <Text style={styles.saudar}>
-              Olá, {nome || 'usuário'}! 👋
+              Olá, {nomeCurto(nome) || 'usuário'}! 👋
             </Text>
 
             <Text style={styles.titulo}>

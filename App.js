@@ -12,6 +12,7 @@ import {
 } from 'react-native-safe-area-context';
 
 import {
+  Alert,
   AppState,
   StyleSheet,
   Text,
@@ -45,6 +46,11 @@ import SOSScreen from './src/sos/SOSScreen';
 import AutenticacaoScreen from './src/autenticacao/AutenticacaoScreen';
 import VerificaBiometria from './src/biometria/VerificaBiometria';
 import VerificarEmail from './src/autenticacao/VerificarEmail';
+import {
+  ativarBiometria,
+  biometriaAtiva,
+  desativarBiometria,
+} from './src/dados/biometria';
 import { garantirEntradaDiretorio } from './src/dados/salvarUsuario';
 import { apagarSenhaOffline } from './src/dados/senhaOffline';
 import GrupoScreen from './src/grupo/GrupoScreen';
@@ -68,13 +74,17 @@ export default function App() {
   // Usuário liberado (já passou pela biometria).
   const [usuario, setUsuario] = useState(null);
 
-  // Biometria obrigatória em toda entrada:
-  //   usuarioPendente → sessão restaurada ou login/cadastro por senha,
-  //                     aguardando a biometria para liberar o app;
-  //   bloqueado       → app travado de novo ao voltar do segundo plano.
+  // Biometria opcional (escolhida depois do cadastro ou em Segurança):
+  //   usuarioPendente   → sessão restaurada ao abrir, aguardando a
+  //                       biometria para liberar o app;
+  //   bloqueado         → app travado de novo ao voltar do segundo plano;
+  //   biometriaLigada   → a pessoa escolheu entrar com biometria;
+  //   oferecerBiometria → conta recém-criada: perguntar se quer usar.
   const [restaurandoSessao, setRestaurandoSessao] = useState(true);
   const [usuarioPendente, setUsuarioPendente] = useState(null);
   const [bloqueado, setBloqueado] = useState(false);
+  const [biometriaLigada, setBiometriaLigada] = useState(false);
+  const [oferecerBiometria, setOferecerBiometria] = useState(false);
   const [avisoLogin, setAvisoLogin] = useState('');
   const [perfil, setPerfil] = useState(null);
   const [grupoId, setGrupoId] = useState(null);
@@ -86,6 +96,11 @@ export default function App() {
   // Subtela que ocupa a tela inteira (câmera do perfil): esconde o
   // "‹ Menu", que ficaria por cima do botão de fechar dela.
   const [telaCheia, setTelaCheia] = useState(false);
+
+  // Meu Perfil sem endereço: não dá para sair de lá antes de cadastrar.
+  // pedidoEndereco muda para o perfil reabrir o cadastro da casa.
+  const [perfilSemEndereco, setPerfilSemEndereco] = useState(false);
+  const [pedidoEndereco, setPedidoEndereco] = useState(0);
 
   // E-mail confirmado: o app só abre depois disso (VerificarEmail).
   // emailConfirmado marca a confirmação feita nesta sessão (o objeto
@@ -151,21 +166,16 @@ export default function App() {
             setTemGrupo(false);
           }
         } else {
+          // Login sem perfil (ex.: conta apagada pela metade): não entra
+          // como "Usuário" sem nome; volta para o login.
           console.log(
             'Perfil do usuário não encontrado.'
           );
 
-          setPerfil({
-            uid: usuario.uid,
-            nome:
-              usuario.nome ||
-              usuario.displayName ||
-              'Usuário',
-            email: usuario.email,
-          });
-
-          setGrupoId(null);
-          setTemGrupo(false);
+          encerrarSessao(
+            'Não encontramos os dados desta conta. Entre de novo ou crie uma conta.'
+          );
+          return;
         }
       } catch (e) {
         console.error(
@@ -194,17 +204,26 @@ export default function App() {
   }, [usuario, emailOk]);
 
   // Só a PRIMEIRA emissão (sessão restaurada ao abrir) é tratada aqui:
-  // a sessão guardada fica travada até a biometria ser confirmada.
-  // Login, cadastro e "Sair" continuam pelos fluxos das telas.
+  // com a biometria ligada, a sessão fica travada até ela ser confirmada;
+  // sem ela, entra direto. Login, cadastro e "Sair" continuam pelos
+  // fluxos das telas.
   useEffect(() => {
     let primeira = true;
 
-    const cancelar = onAuthStateChanged(auth, (usuarioFirebase) => {
+    const cancelar = onAuthStateChanged(auth, async (usuarioFirebase) => {
       if (!primeira) return;
       primeira = false;
 
       if (usuarioFirebase) {
-        setUsuarioPendente(usuarioFirebase);
+        const ligada = await biometriaAtiva(usuarioFirebase.uid);
+
+        setBiometriaLigada(ligada);
+
+        if (ligada) {
+          setUsuarioPendente(usuarioFirebase);
+        } else {
+          setUsuario(usuarioFirebase);
+        }
       }
 
       setRestaurandoSessao(false);
@@ -217,7 +236,7 @@ export default function App() {
   // Enquanto travado não escuta, para a própria biometria (que pode
   // tirar o app do primeiro plano) não disparar um novo bloqueio.
   useEffect(() => {
-    if (!usuario || bloqueado) return;
+    if (!usuario || bloqueado || !biometriaLigada) return;
 
     let saiuEm = null;
 
@@ -234,7 +253,40 @@ export default function App() {
     });
 
     return () => assinatura.remove();
-  }, [usuario, bloqueado]);
+  }, [usuario, bloqueado, biometriaLigada]);
+
+  // Conta recém-criada, já dentro do app: pergunta uma vez se a pessoa
+  // quer entrar com biometria (confirma a biometria antes de ligar).
+  useEffect(() => {
+    if (!oferecerBiometria || !usuario || !emailOk || !perfil) return;
+
+    setOferecerBiometria(false);
+
+    const uid = usuario.uid;
+
+    async function ligar() {
+      const { ativada, mensagem } = await ativarBiometria(uid);
+
+      if (ativada) {
+        setBiometriaLigada(true);
+        Alert.alert(
+          'Biometria ativada',
+          'Ela será pedida sempre que você abrir o Conecta.'
+        );
+      } else {
+        Alert.alert('Biometria não ativada', mensagem);
+      }
+    }
+
+    Alert.alert(
+      'Entrar com biometria?',
+      'Você pode usar o reconhecimento facial ou a digital do aparelho para entrar no Conecta. Dá para mudar depois em Meu Perfil → Configurações → Segurança.',
+      [
+        { text: 'Agora não', style: 'cancel' },
+        { text: 'Usar biometria', onPress: ligar },
+      ]
+    );
+  }, [oferecerBiometria, usuario, emailOk, perfil]);
 
   // Compartilha a localização enquanto o app estiver em uso
   // (somente para usuário autenticado que pertence a uma família).
@@ -248,16 +300,48 @@ export default function App() {
   // prioridade. No Menu, o voltar segue o padrão do Android.
   useVoltarAndroid(
     Boolean(usuario) && !bloqueado && !usuarioPendente && tela !== 'menu',
-    () => setTela('menu')
+    () => voltarMenu()
   );
 
   if (!fontsLoaded) {
     return null;
   }
 
-  const voltarMenu = () => {
+  function voltarMenu() {
+    if (tela === 'perfil' && perfilSemEndereco) {
+      Alert.alert(
+        'Endereço obrigatório',
+        'Cadastre o endereço da sua casa antes de sair de Meu Perfil.',
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          {
+            text: 'Cadastrar',
+            onPress: () => setPedidoEndereco((pedido) => pedido + 1),
+          },
+        ]
+      );
+      return;
+    }
+
     setTela('menu');
-  };
+  }
+
+  // O mapa mostra a família: sem uma, leva para criar ou entrar.
+  function abrirTela(chave) {
+    if (chave === 'mapa' && !temGrupo) {
+      Alert.alert(
+        'Mapa',
+        'Para ver o mapa, crie uma família ou entre em uma.',
+        [
+          { text: 'Agora não', style: 'cancel' },
+          { text: 'Minha Família', onPress: () => setTela('familia') },
+        ]
+      );
+      return;
+    }
+
+    setTela(chave);
+  }
 
   function sairDoAplicativo() {
     setEmailConfirmado(false);
@@ -269,6 +353,9 @@ export default function App() {
     setUsuario(null);
     setUsuarioPendente(null);
     setBloqueado(false);
+    setBiometriaLigada(false);
+    setOferecerBiometria(false);
+    setPerfilSemEndereco(false);
     setPerfil(null);
     setGrupoId(null);
     setTemGrupo(false);
@@ -337,17 +424,27 @@ export default function App() {
         <View style={styles.container}>
           <AutenticacaoScreen
             aviso={avisoLogin}
-            onAutenticado={(usuarioFirebase) => {
+            onAutenticado={async (usuarioFirebase, opcoes) => {
               console.log(
                 'Usuário autenticado:',
                 usuarioFirebase.uid
               );
 
-              // Senha conferida; falta a biometria.
+              // Senha conferida: entra direto. A biometria só é pedida
+              // depois (segundo plano, próxima abertura) se a pessoa a
+              // tiver ligado; conta nova é perguntada se quer usar.
               setAvisoLogin('');
-              setUsuarioPendente(
-                usuarioFirebase
-              );
+
+              if (opcoes?.contaNova) {
+                setBiometriaLigada(false);
+                setOferecerBiometria(true);
+              } else {
+                setBiometriaLigada(
+                  await biometriaAtiva(usuarioFirebase.uid)
+                );
+              }
+
+              setUsuario(usuarioFirebase);
             }}
           />
 
@@ -465,8 +562,13 @@ export default function App() {
         posicaoAtual={localizacao.coordenadas}
         grupoId={temGrupo ? grupoId : null}
         onTelaCheia={setTelaCheia}
+        onEnderecoPendente={setPerfilSemEndereco}
+        pedidoEndereco={pedidoEndereco}
+        biometriaLigada={biometriaLigada}
+        onBiometriaAlterada={setBiometriaLigada}
         onSair={sairDoAplicativo}
         onContaExcluida={() => {
+          desativarBiometria(perfil.uid).catch(() => {});
           sairDoAplicativo();
           setAvisoLogin('Sua conta foi excluída.');
         }}
@@ -497,7 +599,7 @@ export default function App() {
   } else {
     conteudo = (
       <Menu
-        onSelect={setTela}
+        onSelect={abrirTela}
         nome={perfil?.nome}
         localizacao={localizacao}
         grupoId={temGrupo ? grupoId : null}

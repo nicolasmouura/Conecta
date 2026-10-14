@@ -1,7 +1,7 @@
 /*
- * Tela de biometria obrigatória: pede o reconhecimento facial (ou
- * outra biometria) ao abrir o app e ao voltar do segundo plano; 3
- * falhas encerram a sessão.
+ * Tela de biometria (quando a pessoa escolheu entrar com ela): pede o
+ * reconhecimento facial (ou digital) ao abrir o app e ao voltar do
+ * segundo plano; 3 falhas encerram a sessão.
  */
 
 import { useEffect, useRef, useState } from 'react';
@@ -131,8 +131,8 @@ export default function VerificaBiometria({ usuario, onDesbloqueado, onEncerrar 
 
       <Text style={styles.descricao}>
         {facial
-          ? 'Para proteger sua família, o Conecta pede o reconhecimento facial sempre que você entra.'
-          : 'Para proteger sua família, o Conecta pede a biometria do aparelho sempre que você entra.'}
+          ? 'Você escolheu entrar no Conecta com o reconhecimento facial.'
+          : 'Você escolheu entrar no Conecta com a biometria do aparelho.'}
       </Text>
 
       {etapa === 'verificando' ? (

@@ -37,8 +37,8 @@ import { useVoltarAndroid } from '../navegacao/voltar';
 import { cores, fontes, raio } from '../theme/theme';
 
 /*
- * Login e cadastro por e-mail e senha. Depois daqui o App ainda pede
- * a biometria (VerificaBiometria) antes de liberar o acesso.
+ * Login e cadastro por e-mail e senha. A biometria não é pedida
+ * aqui: depois do cadastro o App pergunta se a pessoa quer usá-la.
  *
  * aviso: mensagem de quando a sessão foi encerrada (ex.: 3 falhas na
  * biometria); abre direto no login mostrando o motivo.
@@ -125,7 +125,8 @@ export default function AutenticacaoScreen({ onAutenticado, aviso }) {
 
         console.log('Conta criada:', usuario.uid);
 
-        onAutenticado(usuario);
+        // Conta nova: o App pergunta se a pessoa quer entrar com biometria.
+        onAutenticado(usuario, { contaNova: true });
       } else {
         const resultado = await signInWithEmailAndPassword(
           auth,

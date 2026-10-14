@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Alert,
   StyleSheet,
+  Switch,
   Text,
   TouchableOpacity,
   View,
@@ -16,7 +17,11 @@ import {
 
 import { Feather } from '@expo/vector-icons';
 
-import { biometriaDisponivel } from '../dados/biometria';
+import {
+  ativarBiometria,
+  biometriaDisponivel,
+  desativarBiometria,
+} from '../dados/biometria';
 import EditarInformacoes from './EditarInformacoes';
 import ExcluirConta from './ExcluirConta';
 import MeusLugares from '../lugares/MeusLugares';
@@ -54,6 +59,8 @@ export default function Configuracoes({
   onCasaSalva,
   posicaoAtual,
   grupoId,
+  biometriaLigada,
+  onBiometriaAlterada,
   onSair,
   onContaExcluida,
 }) {
@@ -71,6 +78,32 @@ export default function Configuracoes({
 
   // null = carregando
   const [biometriaOk, setBiometriaOk] = useState(null);
+  const [alterandoBiometria, setAlterandoBiometria] = useState(false);
+
+  // Ligar pede a biometria uma vez (confirma que funciona); desligar não.
+  async function alternarBiometria(ligar) {
+    setAlterandoBiometria(true);
+
+    try {
+      if (ligar) {
+        const { ativada, mensagem } = await ativarBiometria(usuario.uid);
+
+        if (ativada) {
+          onBiometriaAlterada?.(true);
+        } else {
+          Alert.alert('Biometria não ativada', mensagem);
+        }
+      } else {
+        await desativarBiometria(usuario.uid);
+        onBiometriaAlterada?.(false);
+      }
+    } catch (erro) {
+      console.log('Biometria não alterada:', erro.message);
+      Alert.alert('Erro', 'Não foi possível alterar a biometria. Tente novamente.');
+    } finally {
+      setAlterandoBiometria(false);
+    }
+  }
 
   function tocarOpcao(chave) {
     if (chave === 'lugares') {
@@ -199,37 +232,41 @@ export default function Configuracoes({
 
               <View style={styles.opcaoConteudo}>
                 <Text style={styles.opcaoTitulo}>
-                  Reconhecimento facial obrigatório
+                  Entrar com biometria
                 </Text>
 
                 <Text style={styles.opcaoDescricao}>
-                  Sempre que você abre o Conecta ou volta para
-                  ele, o reconhecimento facial é pedido. Depois
-                  de 3 falhas, é preciso entrar com e-mail e
-                  senha.
+                  Ligada, o reconhecimento facial ou a digital é
+                  pedido sempre que você abre o Conecta ou volta
+                  para ele. Depois de 3 falhas, é preciso entrar
+                  com e-mail e senha.
                 </Text>
               </View>
 
-              <Feather
-                name={biometriaOk ? 'check-circle' : 'alert-circle'}
-                size={20}
-                color={biometriaOk ? cores.online : cores.erro}
-              />
+              {alterandoBiometria ? (
+                <ActivityIndicator color={cores.primaria} />
+              ) : (
+                <Switch
+                  value={Boolean(biometriaLigada)}
+                  onValueChange={alternarBiometria}
+                  disabled={!biometriaOk && !biometriaLigada}
+                  trackColor={{ true: cores.primaria }}
+                />
+              )}
             </View>
 
             {!biometriaOk && (
               <Text style={styles.aviso}>
                 Este aparelho não tem biometria cadastrada.
-                Cadastre seu rosto (ou outra biometria) nas
-                configurações do aparelho: sem ela não é
-                possível entrar no Conecta.
+                Cadastre seu rosto ou digital nas configurações
+                do aparelho para poder usar a biometria no
+                Conecta.
               </Text>
             )}
 
             <Text style={styles.aviso}>
               Ao tocar em “Sair do aplicativo”, a próxima
-              entrada pede e-mail, senha e reconhecimento
-              facial.
+              entrada pede e-mail e senha.
             </Text>
           </>
         )}

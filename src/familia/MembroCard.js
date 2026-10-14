@@ -71,7 +71,6 @@ export default function MembroCard({ nome, status, papel, perfil, voce }) {
 
 const styles = StyleSheet.create({
   card: {
-    width: '90%',
     padding: 16,
     marginVertical: 6,
     borderRadius: raio.card,

@@ -205,6 +205,7 @@ export default function TelaMapa({ usuario, grupoId, localizacao }) {
           foco={foco}
           onSelecionar={selecionar}
           minhaCasa={minhaCasa}
+          centroInicial={coordenadas}
         />
 
         <StatusLocalizacao

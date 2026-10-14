@@ -1,10 +1,10 @@
 /*
  * Tela Meu Perfil: dados do usuário, troca da foto (câmera ou galeria),
- * endereço obrigatório (abre o cadastro da casa enquanto não houver) e
- * Configurações.
+ * endereço obrigatório (abre o cadastro da casa enquanto não houver e
+ * o App não deixa sair daqui sem ele) e Configurações.
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import {
   ActivityIndicator,
@@ -54,6 +54,10 @@ export default function PerfilScreen({
   posicaoAtual,
   grupoId,
   onTelaCheia,
+  onEnderecoPendente,
+  pedidoEndereco,
+  biometriaLigada,
+  onBiometriaAlterada,
 }) {
   // Título abaixo do "‹ Menu" (que acompanha a área segura).
   const espacoTopo = useEspacoTopo(60);
@@ -69,6 +73,21 @@ export default function PerfilScreen({
   // entrar aqui (e de novo pelo aviso, se a pessoa fechar).
   const [cadastroCasaAberto, setCadastroCasaAberto] = useState(false);
   const semEndereco = Boolean(dadosPerfil) && !dadosPerfil.enderecoDetalhado;
+
+  // Sem endereço, o App não deixa sair daqui (‹ Menu e voltar do Android).
+  useEffect(() => {
+    onEnderecoPendente?.(semEndereco);
+  }, [semEndereco, onEnderecoPendente]);
+
+  useEffect(() => () => onEnderecoPendente?.(false), [onEnderecoPendente]);
+
+  // Tentou sair sem endereço e tocou em "Cadastrar": reabre a casa
+  // (só quando o pedido muda, não ao abrir a tela).
+  const pedidoInicial = useRef(pedidoEndereco);
+
+  useEffect(() => {
+    if (pedidoEndereco !== pedidoInicial.current) setCadastroCasaAberto(true);
+  }, [pedidoEndereco]);
 
   // Câmera aberta: o App esconde o "‹ Menu" (a câmera tem o próprio "x").
   useEffect(() => {
@@ -388,6 +407,8 @@ export default function PerfilScreen({
             onCasaSalva={aplicarCasa}
             posicaoAtual={posicaoAtual}
             grupoId={grupoId}
+            biometriaLigada={biometriaLigada}
+            onBiometriaAlterada={onBiometriaAlterada}
             onSair={
               sairDoAplicativo
             }

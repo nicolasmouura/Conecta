@@ -8,24 +8,67 @@ import * as LocalAuthentication from 'expo-local-authentication';
 import * as SecureStore from 'expo-secure-store';
 
 /*
- * Reconhecimento facial OBRIGATÓRIO para entrar no app: uma trava
- * LOCAL sobre a sessão do Firebase Authentication (que continua
- * sendo a autenticação).
+ * Entrar com biometria é OPCIONAL: uma trava LOCAL sobre a sessão do
+ * Firebase Authentication (que continua sendo a autenticação).
  *
- * Toda entrada passa pela biometria: sessão restaurada ao abrir o
- * app, login por senha, cadastro e volta do segundo plano. Depois de
- * 3 falhas a sessão é encerrada e é preciso entrar com e-mail e senha
- * (e passar pela biometria de novo).
+ * A pessoa escolhe usar depois de criar a conta (App) ou em
+ * Configurações → Segurança. Ligada, a biometria é pedida ao abrir o
+ * app com a sessão salva e ao voltar do segundo plano; o login por
+ * e-mail e senha não pede. Depois de 3 falhas a sessão é encerrada e
+ * é preciso entrar com e-mail e senha.
  *
- * No aparelho fica só o contador de falhas (SecureStore). Senha e
- * dados biométricos nunca são guardados: quem confere a biometria é
- * o sistema operacional e quem confere a senha é o Firebase.
+ * No aparelho ficam só a escolha e o contador de falhas (SecureStore).
+ * Senha e dados biométricos nunca são guardados: quem confere a
+ * biometria é o sistema operacional e quem confere a senha é o Firebase.
  */
 
 export const MAXIMO_FALHAS = 3;
 
 // Chaves do SecureStore aceitam apenas letras, números, ".", "-" e "_".
 const chaveFalhas = (uid) => `conecta.biometria.falhas.${uid}`;
+const chaveAtiva = (uid) => `conecta.biometria.ativa.${uid}`;
+
+// A pessoa escolheu entrar com biometria neste aparelho?
+export async function biometriaAtiva(uid) {
+  try {
+    return (await SecureStore.getItemAsync(chaveAtiva(uid))) === '1';
+  } catch (erro) {
+    console.log('Escolha da biometria não lida:', erro.message);
+    return false;
+  }
+}
+
+export async function desativarBiometria(uid) {
+  await SecureStore.deleteItemAsync(chaveAtiva(uid));
+}
+
+/*
+ * Liga a biometria depois de confirmá-la uma vez (garante que o
+ * aparelho tem e que a pessoa consegue usar antes de travar o app).
+ * Devolve { ativada, mensagem }; a mensagem explica quando não ligou.
+ */
+export async function ativarBiometria(uid) {
+  if (!(await biometriaDisponivel())) {
+    return {
+      ativada: false,
+      mensagem: 'Este aparelho não tem biometria cadastrada. Cadastre seu rosto ou digital nas configurações do aparelho e tente de novo em Meu Perfil → Configurações → Segurança.',
+    };
+  }
+
+  const resultado = await autenticarComBiometria('Ativar a biometria');
+
+  if (resultado !== 'sucesso') {
+    return {
+      ativada: false,
+      mensagem: 'A biometria não foi confirmada. Você pode ativar depois em Meu Perfil → Configurações → Segurança.',
+    };
+  }
+
+  await SecureStore.setItemAsync(chaveAtiva(uid), '1');
+  await zerarFalhas(uid).catch(() => {});
+
+  return { ativada: true, mensagem: '' };
+}
 
 // Tem sensor e há biometria cadastrada no sistema?
 export async function biometriaDisponivel() {
@@ -174,7 +217,7 @@ export function proximoPasso(classificacao, falhas) {
       return {
         acao: 'tentar',
         falhas,
-        mensagem: 'O Conecta exige reconhecimento facial para entrar. Cadastre seu rosto (ou outra biometria) nas configurações do aparelho e tente novamente.',
+        mensagem: 'A biometria não está disponível neste aparelho. Cadastre seu rosto ou digital nas configurações do aparelho, ou toque em "Sair da conta" e entre com e-mail e senha.',
       };
   }
 }
