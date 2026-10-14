@@ -1,6 +1,6 @@
 /*
  * Completa o app.json com valores que não podem ir para o Git.
- * A chave do Google Maps vem do .env.local (veja .env.example).
+ * A chave do Google Maps vem do .env.local (GOOGLE_MAPS_API_KEY).
  */
 module.exports = ({ config }) => ({
   ...config,

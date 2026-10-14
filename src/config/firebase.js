@@ -10,7 +10,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 /*
  * Firebase: Cloud Firestore (dados) e Authentication (contas).
- * Os valores vêm do .env.local (veja .env.example). O prefixo
+ * Os valores vêm do .env.local (EXPO_PUBLIC_FIREBASE_*). O prefixo
  * EXPO_PUBLIC_ é o que deixa o Expo colocá-los no app.
  */
 const firebaseConfig = {
@@ -29,7 +29,7 @@ const faltando = Object.entries(firebaseConfig)
 if (faltando.length) {
   throw new Error(
     `Configuração do Firebase incompleta (${faltando.join(', ')}). ` +
-      'Copie o .env.example para .env.local, preencha e reinicie o "npx expo start".'
+      'Preencha as chaves EXPO_PUBLIC_FIREBASE_* no .env.local e reinicie o "npx expo start -c".'
   );
 }
 

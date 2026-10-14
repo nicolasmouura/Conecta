@@ -35,6 +35,6 @@ yarn-error.*
 # typescript
 *.tsbuildinfo
 
-# Firebase (logs do emulador: npm run test:banco)
+# Firebase (logs do comando firebase)
 firebase-debug.log
 firestore-debug.log
