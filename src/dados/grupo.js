@@ -1,3 +1,8 @@
+/*
+ * Família (grupos/{id}): criar, buscar, ouvir os membros e sair da
+ * família.
+ */
+
 import {
   arrayRemove,
   collection,
@@ -7,7 +12,6 @@ import {
   getDocs,
   onSnapshot,
   query,
-  setDoc,
   where,
   writeBatch,
 } from 'firebase/firestore';
@@ -90,43 +94,6 @@ export async function buscarGrupoPorId(grupoId) {
   };
 }
 
-/*
- * Grupos criados antes do sistema de convites só possuem
- * o array "membros". Cria o registro do próprio usuário
- * na subcoleção para que ele apareça na lista.
- */
-export async function garantirRegistroMembro(grupo, usuario) {
-  if (!grupo?.membros?.includes(usuario.uid)) {
-    return;
-  }
-
-  const referencia = doc(
-    db,
-    'grupos',
-    grupo.id,
-    'membros',
-    usuario.uid
-  );
-
-  const registro = await getDoc(referencia);
-
-  if (registro.exists()) {
-    return;
-  }
-
-  await setDoc(referencia, {
-    uid: usuario.uid,
-    nome: usuario.nome || 'Usuário',
-    papel:
-      grupo.administradorUid === usuario.uid
-        ? 'administrador'
-        : 'membro',
-    status: 'ativo',
-    entrouEm: new Date().toISOString(),
-  });
-
-  console.log('Registro de membro criado:', usuario.uid);
-}
 
 export function observarMembros(grupoId, callback, onErro) {
   return onSnapshot(
@@ -135,7 +102,8 @@ export function observarMembros(grupoId, callback, onErro) {
       callback(
         consulta.docs.map((documento) => ({
           id: documento.id,
-          ...documento.data(),
+          // "Estou bem" recém-tocado ainda sem hora do servidor: usa a estimativa.
+          ...documento.data({ serverTimestamps: 'estimate' }),
         }))
       );
     },

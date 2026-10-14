@@ -1,3 +1,8 @@
+/*
+ * Tela de SOS: acionar o alerta para a família, ver os SOS ativos e
+ * avisar por SMS (funciona sem internet).
+ */
+
 import { useEffect, useState } from 'react';
 
 import {

@@ -1,3 +1,8 @@
+/*
+ * Configuração do ESLint (npm run lint): regras do Expo, globais do
+ * Jest nos testes e do Node nos testes do banco.
+ */
+
 // https://docs.expo.dev/guides/using-eslint/
 const { defineConfig } = require('eslint/config');
 const expoConfig = require('eslint-config-expo/flat');

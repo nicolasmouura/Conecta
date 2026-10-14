@@ -1,3 +1,9 @@
+/*
+ * Tela Meu Perfil: dados do usuário, troca da foto (câmera ou galeria),
+ * endereço obrigatório (abre o cadastro da casa enquanto não houver) e
+ * Configurações.
+ */
+
 import { useEffect, useState } from 'react';
 
 import {
@@ -8,8 +14,11 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
 } from 'react-native';
+
+import { Feather } from '@expo/vector-icons';
 
 import * as ImagePicker from 'expo-image-picker';
 
@@ -19,6 +28,7 @@ import DadosUsuario from './DadosUsuario';
 import Configuracoes from './Configuracoes';
 import { useEspacoTopo } from '../navegacao/BotaoMenu';
 import CameraScreen from '../camera/CameraScreen';
+import EditarLugar from '../lugares/EditarLugar';
 
 import { auth } from '../config/firebase';
 import {
@@ -27,10 +37,14 @@ import {
   salvarFotoPerfil,
 } from '../dados/salvarUsuario';
 import { gerarMiniatura } from '../dados/fotoPerfil';
+import { salvarLugar, TIPOS_LUGAR } from '../dados/lugares';
 import {
   cores,
   fontes,
+  raio,
 } from '../theme/theme';
+
+const TIPO_CASA = TIPOS_LUGAR.find((tipo) => tipo.id === 'casa');
 
 export default function PerfilScreen({
   usuario,
@@ -50,6 +64,11 @@ export default function PerfilScreen({
   // Dados pessoais vindos de usuarios/{uid}
   const [dadosPerfil, setDadosPerfil] = useState(null);
   const [erroPerfil, setErroPerfil] = useState('');
+
+  // Endereço obrigatório: sem ele, o cadastro da casa abre sozinho ao
+  // entrar aqui (e de novo pelo aviso, se a pessoa fechar).
+  const [cadastroCasaAberto, setCadastroCasaAberto] = useState(false);
+  const semEndereco = Boolean(dadosPerfil) && !dadosPerfil.enderecoDetalhado;
 
   // Câmera aberta: o App esconde o "‹ Menu" (a câmera tem o próprio "x").
   useEffect(() => {
@@ -74,6 +93,10 @@ export default function PerfilScreen({
 
         if (ativo) {
           setDadosPerfil(perfilSalvo);
+
+          if (!perfilSalvo.enderecoDetalhado) {
+            setCadastroCasaAberto(true);
+          }
         }
       } catch (error) {
         console.error(
@@ -122,6 +145,15 @@ export default function PerfilScreen({
       endereco,
       enderecoDetalhado,
     }));
+  }
+
+  // Cadastro obrigatório da casa (o EditarLugar mostra o erro se falhar).
+  async function salvarCasaObrigatoria(lugar) {
+    const salvo = await salvarLugar(usuario.uid, 'casa', lugar);
+
+    aplicarCasa(salvo);
+    setCadastroCasaAberto(false);
+    Alert.alert('Endereço salvo', 'Sua casa também foi marcada no mapa.');
   }
 
   /*
@@ -285,6 +317,27 @@ export default function PerfilScreen({
           Meu Perfil
         </Text>
 
+        {semEndereco && (
+          <TouchableOpacity
+            style={styles.avisoEndereco}
+            onPress={() => setCadastroCasaAberto(true)}
+            accessibilityRole="button"
+          >
+            <Feather name="alert-circle" size={20} color={cores.erro} />
+
+            <View style={styles.avisoEnderecoTextos}>
+              <Text style={styles.avisoEnderecoTitulo}>
+                Endereço obrigatório
+              </Text>
+              <Text style={styles.avisoEnderecoTexto}>
+                Toque aqui para cadastrar o endereço da sua casa.
+              </Text>
+            </View>
+
+            <Feather name="chevron-right" size={20} color={cores.textoSecundario} />
+          </TouchableOpacity>
+        )}
+
         {dadosPerfil ? (
           <DadosUsuario
             perfil={dadosPerfil}
@@ -342,6 +395,16 @@ export default function PerfilScreen({
           />
         </View>
       </ScrollView>
+
+      {cadastroCasaAberto && (
+        <EditarLugar
+          tipo={TIPO_CASA}
+          lugar={null}
+          posicaoAtual={posicaoAtual}
+          onFechar={() => setCadastroCasaAberto(false)}
+          onSalvar={salvarCasaObrigatoria}
+        />
+      )}
     </KeyboardAvoidingView>
   );
 }
@@ -385,5 +448,33 @@ const styles = StyleSheet.create({
   rodape: {
     marginTop: 12,
     width: '100%',
+  },
+
+  avisoEndereco: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 14,
+    marginBottom: 20,
+    borderRadius: raio.card,
+    borderWidth: 1.5,
+    borderColor: cores.erro,
+    backgroundColor: cores.superficie,
+  },
+
+  avisoEnderecoTextos: {
+    flex: 1,
+  },
+
+  avisoEnderecoTitulo: {
+    fontSize: 15,
+    fontFamily: fontes.destaque,
+    color: cores.erro,
+  },
+
+  avisoEnderecoTexto: {
+    fontSize: 13,
+    color: cores.texto,
+    marginTop: 2,
   },
 });

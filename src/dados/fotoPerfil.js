@@ -1,3 +1,8 @@
+/*
+ * Transforma a foto escolhida numa miniatura JPEG pequena (base64) que
+ * cabe no perfil do Firestore.
+ */
+
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 
 /*

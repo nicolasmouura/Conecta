@@ -1,3 +1,9 @@
+/*
+ * Tela "Confirme seu e-mail": o app só abre depois que a pessoa toca
+ * no link enviado pelo Firebase (Já confirmei, Reenviar e-mail, Sair
+ * da conta).
+ */
+
 import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,

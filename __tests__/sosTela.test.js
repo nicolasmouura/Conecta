@@ -1,3 +1,8 @@
+/*
+ * Testes da tela de SOS: botão "Avisar por SMS" com e sem família e
+ * depois de acionar.
+ */
+
 import { Alert } from 'react-native';
 import { act, configure, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 

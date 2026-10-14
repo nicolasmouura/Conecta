@@ -1,3 +1,8 @@
+/*
+ * Tela Mapa: junta membros, localizações e perfis da família e mostra
+ * o mapa com os cards.
+ */
+
 import { StyleSheet, View } from 'react-native';
 import { useState, useEffect, useMemo } from 'react';
 import { StatusBar } from 'expo-status-bar';
@@ -148,11 +153,12 @@ export default function TelaMapa({ usuario, grupoId, localizacao }) {
         marcadores,
         semLocalizacao,
         perfis,
+        membros,
         minhaPosicao: meuMarcador,
         minhaCasa,
         agora,
       }),
-    [marcadores, semLocalizacao, perfis, meuMarcador, minhaCasa, agora]
+    [marcadores, semLocalizacao, perfis, membros, meuMarcador, minhaCasa, agora]
   );
 
   // Marcadores com a mesma foto/status dos cards (consistência).

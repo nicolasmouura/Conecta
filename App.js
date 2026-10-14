@@ -1,3 +1,10 @@
+/*
+ * Raiz do app: controla a sessão (login, biometria e confirmação do
+ * e-mail), carrega o perfil e a família, liga o compartilhamento da
+ * localização e troca entre o Menu e as telas (Minha Família, Mapa,
+ * Histórico, Meu Perfil e SOS).
+ */
+
 import { useEffect, useState } from 'react';
 
 import {
@@ -38,8 +45,7 @@ import SOSScreen from './src/sos/SOSScreen';
 import AutenticacaoScreen from './src/autenticacao/AutenticacaoScreen';
 import VerificaBiometria from './src/biometria/VerificaBiometria';
 import VerificarEmail from './src/autenticacao/VerificarEmail';
-import { garantirEntradaDiretorio, protegerDocumento } from './src/dados/salvarUsuario';
-import { limparDadosAntigos } from './src/dados/limparDadosAntigos';
+import { garantirEntradaDiretorio } from './src/dados/salvarUsuario';
 import { apagarSenhaOffline } from './src/dados/senhaOffline';
 import GrupoScreen from './src/grupo/GrupoScreen';
 import { useCompartilharLocalizacao } from './src/mapa/compartilharLocalizacao';
@@ -116,18 +122,11 @@ export default function App() {
             email: dadosUsuario.email,
           });
 
-          // Contas antigas: entrada no índice de convites (Etapa 9).
+          // Entrada no índice de convites: criada aqui, depois que o
+          // e-mail foi confirmado (no cadastro ainda não estava).
           garantirEntradaDiretorio(usuario.uid).catch((erro) =>
             console.log(
               'Índice de convites não atualizado:',
-              erro.code || erro.message
-            )
-          );
-
-          // Contas antigas: CPF sai do perfil (lido pela família).
-          protegerDocumento(usuario.uid).catch((erro) =>
-            console.log(
-              'CPF não movido para a área privada:',
               erro.code || erro.message
             )
           );
@@ -197,13 +196,6 @@ export default function App() {
   // Só a PRIMEIRA emissão (sessão restaurada ao abrir) é tratada aqui:
   // a sessão guardada fica travada até a biometria ser confirmada.
   // Login, cadastro e "Sair" continuam pelos fluxos das telas.
-  // Restos da fase "dados só no aparelho" (uma vez por abertura).
-  useEffect(() => {
-    limparDadosAntigos().catch((erro) =>
-      console.log('Dados locais antigos não apagados:', erro.message)
-    );
-  }, []);
-
   useEffect(() => {
     let primeira = true;
 

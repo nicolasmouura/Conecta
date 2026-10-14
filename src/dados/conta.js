@@ -1,3 +1,8 @@
+/*
+ * Excluir a conta: confere a senha, sai da família e apaga todos os
+ * dados da pessoa e o login.
+ */
+
 import {
   collection,
   doc,
@@ -41,7 +46,7 @@ async function apagarTodos(consulta) {
  *   3. sai da família (administração passa adiante / família apagada);
  *   4. histórico, lugares, convites enviados e recebidos, índice de
  *      convites, localização no mapa;
- *   5. perfil e CPF (juntos, como as regras exigem);
+ *   5. perfil, CPF e índice do CPF (juntos, como as regras exigem);
  *   6. o login (Firebase Authentication).
  * Cada passo pode ser repetido: se algo falhar no meio (ex.: internet
  * caiu), tentar de novo continua de onde parou.
@@ -66,7 +71,6 @@ export async function excluirConta(senha) {
 
   await apagarTodos(collection(db, 'historicoLocalizacoes', uid, 'pontos'));
   await apagarTodos(collection(db, 'usuarios', uid, 'lugares'));
-  await apagarTodos(collection(db, 'usuarios', uid, 'conquistas'));
   await apagarTodos(query(collection(db, 'convites'), where('deUid', '==', uid)));
   await apagarTodos(query(collection(db, 'convites'), where('paraEmail', '==', email.toLowerCase())));
 
@@ -83,8 +87,14 @@ export async function excluirConta(senha) {
 
   lote.delete(doc(db, 'familiares', uid));
 
+  // Perfil, CPF e o índice do CPF juntos (o CPF fica livre de novo).
   if (perfil.exists()) {
-    lote.delete(doc(db, 'usuarios', uid, 'privado', 'documentos'));
+    const privado = await getDoc(doc(db, 'usuarios', uid, 'privado', 'documentos'));
+    const cpf = privado.exists() ? privado.data().cpf : null;
+
+    if (cpf) lote.delete(doc(db, 'cpfs', cpf.replace(/\D/g, '')));
+
+    lote.delete(privado.ref);
     lote.delete(referenciaPerfil);
   }
 

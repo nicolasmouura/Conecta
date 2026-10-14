@@ -1,3 +1,8 @@
+/*
+ * Testes do SOS por SMS: mensagem, telefones da família e abertura do
+ * app de mensagens.
+ */
+
 import * as Location from 'expo-location';
 import * as SMS from 'expo-sms';
 

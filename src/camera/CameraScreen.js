@@ -1,3 +1,8 @@
+/*
+ * Câmera da foto de perfil: pede a permissão, mostra a imagem, tira a
+ * foto e abre a pré-visualização.
+ */
+
 import { useRef, useState } from 'react';
 import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';

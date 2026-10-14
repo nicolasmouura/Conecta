@@ -1,3 +1,8 @@
+/*
+ * Card de um membro em Minha Família: nome, papel, situação e contato
+ * (telefone e onde mora). O CPF nunca aparece para a família.
+ */
+
 import { StyleSheet, Text, View } from 'react-native';
 import { cores, fontes, raio, sombra } from '../theme/theme';
 

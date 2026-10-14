@@ -1,3 +1,8 @@
+/*
+ * Inicializa o Firebase (Firestore e Authentication) com as chaves do
+ * .env.local e mantém a sessão salva no aparelho.
+ */
+
 import { getApp, getApps, initializeApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
 import { getAuth, getReactNativePersistence, initializeAuth } from 'firebase/auth';

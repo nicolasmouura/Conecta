@@ -1,3 +1,7 @@
+/*
+ * Pré-visualização da foto tirada: usar a foto ou tirar outra.
+ */
+
 import { Image, Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { cores, fontes, raio } from '../theme/theme';

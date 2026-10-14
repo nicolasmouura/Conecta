@@ -1,3 +1,8 @@
+/*
+ * Configurações (em Meu Perfil): Editar informações, Meus lugares,
+ * Segurança (encerrar SOS e biometria), Excluir conta e Sair.
+ */
+
 import { useState } from 'react';
 
 import {

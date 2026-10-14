@@ -1,3 +1,8 @@
+/*
+ * Histórico de localizações: quando registrar um ponto, registrar,
+ * buscar por período e formatar horários.
+ */
+
 import {
   addDoc,
   collection,

@@ -1,4 +1,10 @@
+/*
+ * Textos dos cards da família no mapa: online ou offline, distância
+ * até você e situação em relação à casa.
+ */
+
 import { distanciaEmMetros } from './buscarFamiliares';
+import { descreverEstouBem } from './estouBem';
 import { calcularEstadoCasa } from './lugares';
 
 /*
@@ -75,8 +81,11 @@ function minhaLinhaCasa(marcador, minhaCasa) {
  * perfis: { uid: perfil } de buscarPerfisDosMembros (traz a foto)
  * minhaPosicao: { latitude, longitude } ou null
  */
-export function montarCardsFamiliares({ marcadores, semLocalizacao, perfis, minhaPosicao, minhaCasa, agora }) {
+// membros: registros da família (estouBemEm = último "Estou bem").
+export function montarCardsFamiliares({ marcadores, semLocalizacao, perfis, membros, minhaPosicao, minhaCasa, agora }) {
   const fotoDe = (uid) => perfis?.[uid]?.foto || null;
+  const estouBemDe = (uid) =>
+    descreverEstouBem((membros || []).find((membro) => (membro.uid || membro.id) === uid)?.estouBemEm, agora);
 
   const comLocalizacao = marcadores.map((marcador) => {
     const { online, visto } = statusPresenca(marcador.atualizadoEm, agora);
@@ -96,6 +105,7 @@ export function montarCardsFamiliares({ marcadores, semLocalizacao, perfis, minh
       distancia,
       rua: marcador.rua || null,
       casa: marcador.voce ? minhaLinhaCasa(marcador, minhaCasa) : descreverCasa(marcador),
+      estouBem: estouBemDe(marcador.uid),
     };
   });
 
@@ -110,6 +120,7 @@ export function montarCardsFamiliares({ marcadores, semLocalizacao, perfis, minh
     distancia: null,
     rua: null,
     casa: pessoa.voce && minhaCasa === null ? 'Casa não cadastrada' : null,
+    estouBem: estouBemDe(pessoa.uid),
   }));
 
   // Você primeiro; depois quem está online; depois os demais.

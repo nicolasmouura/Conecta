@@ -1,63 +1,57 @@
-import { deleteField, doc, getDoc, setDoc, writeBatch } from 'firebase/firestore';
+/*
+ * Perfil do usuário (usuarios/{uid}): cadastro, leitura, edição, foto,
+ * CPF na área privada, índice de convites e validações (CPF, telefone,
+ * cadastro).
+ */
+
+import { doc, getDoc, setDoc, writeBatch } from 'firebase/firestore';
 
 import { auth, db } from '../config/firebase';
 
-// Limites também conferidos no firestore.rules.
-// endereco: a linha montada a partir da Casa (lugares.salvarLugar).
+// Limites dos campos editáveis (também conferidos no firestore.rules).
 export const LIMITES_PERFIL = {
   nome: 60,
   telefone: 20,
-  documento: 20,
-  endereco: 400,
 };
 
 /*
  * CPF: fica em usuarios/{uid}/privado/documentos ({ cpf }), que só o
  * dono lê (firestore.rules). O perfil usuarios/{uid} é lido pela
- * família, então nunca leva o CPF. Contas antigas tinham o CPF no
- * campo "documento" do perfil: protegerDocumento() o move no login.
+ * família, então nunca leva o CPF.
+ *
+ * Um CPF = uma conta: cpfs/{11 números} → { uid }. As regras só deixam
+ * criar se estiver livre, e a leitura só responde "livre" ou "é seu"
+ * (de outra pessoa é recusada).
  */
 function referenciaDocumentos(uid) {
   return doc(db, 'usuarios', uid, 'privado', 'documentos');
 }
 
-// CPF do próprio usuário ('' se não tiver). Só o dono consegue ler.
-// dadosPerfil: usuarios/{uid} já lido (conta antiga ainda não migrada).
-async function buscarDocumento(uid, dadosPerfil) {
-  const privado = await getDoc(referenciaDocumentos(uid));
-
-  if (privado.exists()) return privado.data().cpf || '';
-
-  return dadosPerfil?.documento || '';
+function referenciaCpf(cpf) {
+  return doc(db, 'cpfs', cpf.replace(/\D/g, ''));
 }
 
-/*
- * Conta antiga: move o CPF do perfil (lido pela família) para o
- * documento privado, no mesmo lote. Não faz nada se já foi movido.
- */
-export async function protegerDocumento(uid) {
-  if (auth.currentUser?.uid !== uid) return false;
+// Lança CPF_JA_CADASTRADO se o CPF já é de outra conta.
+async function garantirCpfLivre(cpf) {
+  let dono;
 
-  const referenciaPerfil = doc(db, 'usuarios', uid);
-  const perfil = await getDoc(referenciaPerfil);
-  const documento = perfil.exists() ? perfil.data().documento : undefined;
-
-  if (documento === undefined) return false;
-
-  const lote = writeBatch(db);
-  const privado = await getDoc(referenciaDocumentos(uid));
-
-  if (!privado.exists() && documento) {
-    lote.set(referenciaDocumentos(uid), { cpf: documento });
+  try {
+    dono = await getDoc(referenciaCpf(cpf));
+  } catch (erro) {
+    if (erro.code === 'permission-denied') throw new Error('CPF_JA_CADASTRADO');
+    throw erro;
   }
 
-  lote.update(referenciaPerfil, { documento: deleteField() });
+  if (dono.exists() && dono.data().uid !== auth.currentUser?.uid) {
+    throw new Error('CPF_JA_CADASTRADO');
+  }
+}
 
-  await lote.commit();
+// CPF do próprio usuário ('' se não tiver). Só o dono consegue ler.
+async function buscarDocumento(uid) {
+  const privado = await getDoc(referenciaDocumentos(uid));
 
-  console.log('CPF movido para a área privada:', uid);
-
-  return true;
+  return privado.exists() ? privado.data().cpf || '' : '';
 }
 
 /*
@@ -114,8 +108,9 @@ async function incluirNoDiretorio(lote, uid, nome, email) {
 }
 
 /*
- * Contas criadas antes da Etapa 9 não têm entrada no índice:
- * ela é criada na primeira vez que a pessoa entra no app.
+ * A entrada no índice exige e-mail confirmado, que o cadastro ainda
+ * não tem: ela é criada quando a pessoa entra no app já confirmada
+ * (App.js). Se já existir, não faz nada.
  */
 export async function garantirEntradaDiretorio(uid) {
   const usuarioAtual = auth.currentUser;
@@ -133,11 +128,17 @@ export async function garantirEntradaDiretorio(uid) {
 }
 
 /*
- * Cadastro: cria usuarios/{uid} com os dados pessoais e, à parte,
- * o CPF em usuarios/{uid}/privado/documentos (só o dono lê).
+ * Cadastro: cria usuarios/{uid} com os dados pessoais e, à parte, o
+ * CPF (área privada + índice de CPFs), tudo no mesmo lote. O endereço
+ * não vem aqui: é cadastrado depois, em Meu Perfil (a Casa).
+ * Lança CPF_JA_CADASTRADO se o CPF já tem conta.
  * A senha nunca passa por aqui: é do Firebase Authentication.
  */
 export async function salvarPerfilUsuario(usuario) {
+  const cpf = formatarCPF(usuario.cpf);
+
+  await garantirCpfLivre(cpf);
+
   const perfil = {
     nome: usuario.nome.trim(),
     email: usuario.email,
@@ -146,28 +147,29 @@ export async function salvarPerfilUsuario(usuario) {
   };
 
   if (usuario.telefone) perfil.telefone = formatarTelefone(usuario.telefone);
-  if (usuario.endereco) perfil.endereco = usuario.endereco.trim();
 
-  // Perfil e entrada no índice de convites, juntos.
   const lote = writeBatch(db);
 
   lote.set(doc(db, 'usuarios', usuario.uid), perfil);
-
-  if (usuario.cpf) {
-    lote.set(referenciaDocumentos(usuario.uid), { cpf: formatarCPF(usuario.cpf) });
-  }
+  lote.set(referenciaDocumentos(usuario.uid), { cpf });
+  lote.set(referenciaCpf(cpf), { uid: usuario.uid });
   await incluirNoDiretorio(lote, usuario.uid, perfil.nome, auth.currentUser?.email || usuario.email);
 
-  await lote.commit();
+  try {
+    await lote.commit();
+  } catch (erro) {
+    // Outra conta pegou o CPF entre a conferência e a gravação.
+    await garantirCpfLivre(cpf);
+    throw erro;
+  }
 
   console.log('Perfil salvo:', usuario.uid);
 }
 
 /*
- * usuarios/{uid} é a fonte principal dos dados pessoais.
- * Usuários antigos podem não ter telefone, documento ou
- * endereço: esses campos voltam como texto vazio. Endereço
- * digitado antes dos campos separados não tem enderecoDetalhado.
+ * usuarios/{uid} é a fonte principal dos dados pessoais. Campos ainda
+ * não preenchidos (ex.: endereço, antes de cadastrar a Casa) voltam
+ * como texto vazio (enderecoDetalhado: null).
  */
 function normalizarPerfil(uid, dados = {}) {
   return {
@@ -188,12 +190,10 @@ export async function buscarPerfil(uid) {
   const dados = resultado.exists() ? resultado.data() : {};
 
   if (auth.currentUser?.uid === uid) {
-    return normalizarPerfil(uid, { ...dados, documento: await buscarDocumento(uid, dados) });
+    return normalizarPerfil(uid, { ...dados, documento: await buscarDocumento(uid) });
   }
 
-  const { documento, ...semDocumento } = dados;
-
-  return normalizarPerfil(uid, semDocumento);
+  return normalizarPerfil(uid, dados);
 }
 
 // Perfis dos membros da família. Um perfil que não puder
@@ -204,12 +204,8 @@ export async function buscarPerfisDosMembros(uids) {
       try {
         const resultado = await getDoc(doc(db, 'usuarios', uid));
 
-        if (!resultado.exists()) return null;
-
-        // O CPF nunca vai para a tela da família.
-        const { documento, ...semDocumento } = resultado.data();
-
-        return normalizarPerfil(uid, semDocumento);
+        // O CPF fica na área privada: nunca vem para a família.
+        return resultado.exists() ? normalizarPerfil(uid, resultado.data()) : null;
       } catch (erro) {
         console.error('Erro ao buscar perfil do membro:', uid, erro);
         return null;
@@ -269,7 +265,7 @@ export function formatarCPF(cpf) {
 
 // Nome, telefone e endereço (cadastro e "Editar informações").
 // Retorna a mensagem de erro, ou null se os dados forem válidos.
-export function validarDadosEditaveis({ nome, telefone, endereco }) {
+export function validarDadosEditaveis({ nome, telefone }) {
   if (!nome.trim()) {
     return 'Digite seu nome.';
   }
@@ -284,22 +280,18 @@ export function validarDadosEditaveis({ nome, telefone, endereco }) {
     return 'Digite um telefone válido, com DDD.';
   }
 
-  if (!endereco.trim()) {
-    return 'Digite seu endereço.';
-  }
-
   return null;
 }
 
 // Cadastro completo. Retorna a mensagem de erro, ou null.
-export function validarCadastro({ nome, email, cpf, telefone, endereco, senha, confirmacao }) {
+export function validarCadastro({ nome, email, cpf, telefone, senha, confirmacao }) {
   if (!nome.trim()) return 'Digite seu nome completo.';
   if (!email.trim()) return 'Digite seu e-mail.';
   if (!EMAIL_VALIDO.test(email.trim())) return 'Digite um e-mail válido.';
   if (!cpf.trim()) return 'Digite seu CPF.';
   if (!cpfValido(cpf)) return 'Digite um CPF válido.';
 
-  const erroDados = validarDadosEditaveis({ nome, telefone, endereco });
+  const erroDados = validarDadosEditaveis({ nome, telefone });
 
   if (erroDados) return erroDados;
 
@@ -312,22 +304,15 @@ export function validarCadastro({ nome, email, cpf, telefone, endereco, senha, c
 }
 
 /*
- * O que "Salvar alterações" pode enviar: nome e telefone. O endereço
- * é salvo junto com a Casa (lugares.salvarLugar). E-mail nunca. CPF
- * só quando a conta ainda não tem nenhum (contas antigas), e nunca
- * para substituir um já cadastrado.
+ * O que "Salvar alterações" pode enviar: só nome e telefone. O
+ * endereço é salvo junto com a Casa (lugares.salvarLugar); e-mail e
+ * CPF nunca mudam.
  */
-export function montarAlteracoes(perfil, formulario) {
-  const alteracoes = {
+export function montarAlteracoes(formulario) {
+  return {
     nome: formulario.nome,
     telefone: formulario.telefone,
   };
-
-  if (!perfil.documento && formulario.cpf) {
-    alteracoes.cpf = formulario.cpf;
-  }
-
-  return alteracoes;
 }
 
 // Mostra só os 2 últimos caracteres: 123.456.789-10 → •••.•••.•••-10
@@ -383,22 +368,7 @@ export async function atualizarPerfil(uid, dados) {
   const dadosAtuais = atual.exists() ? atual.data() : {};
   const grupoId = dadosAtuais.grupoId || null;
 
-  let cpfNovo = null;
-
-  if (dados.cpf && !(await buscarDocumento(uid, dadosAtuais))) {
-    if (!cpfValido(dados.cpf)) {
-      throw new Error('CPF_INVALIDO');
-    }
-
-    cpfNovo = formatarCPF(dados.cpf);
-  }
-
   const lote = writeBatch(db);
-
-  // CPF informado pela primeira vez (conta antiga sem CPF): área privada.
-  if (cpfNovo) {
-    lote.set(referenciaDocumentos(uid), { cpf: cpfNovo });
-  }
 
   lote.set(
     referenciaPerfil,
@@ -442,6 +412,5 @@ export async function atualizarPerfil(uid, dados) {
 
   console.log('Perfil atualizado:', uid);
 
-  // A tela mostra o CPF (mascarado) logo depois de salvar.
-  return cpfNovo ? { ...perfil, documento: cpfNovo } : perfil;
+  return perfil;
 }

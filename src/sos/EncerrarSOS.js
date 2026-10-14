@@ -1,3 +1,8 @@
+/*
+ * Encerrar o próprio SOS (Configurações → Segurança), com biometria ou
+ * senha; 3 senhas erradas encerram a sessão.
+ */
+
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,

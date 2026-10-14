@@ -1,3 +1,8 @@
+/*
+ * Configurações → Meus lugares: lista dos lugares (por enquanto, a
+ * Casa) e abre o cadastro ou a edição.
+ */
+
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,

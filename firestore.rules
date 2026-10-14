@@ -98,17 +98,13 @@ service cloud.firestore {
       return /databases/$(database)/documents/usuarios/$(uid)/privado/documentos;
     }
 
-    // O CPF fica em usuarios/{uid}/privado/documentos (só o dono lê).
-    // Contas antigas ainda têm o campo "documento" no perfil, que a
-    // família lê: ele não muda, e só pode SAIR se, no mesmo lote, a
-    // cópia privada tiver o mesmo valor. Nunca entra de novo.
-    function documentoSoSaiParaAreaPrivada(userId) {
-      let anterior = resource.data.get('documento', null);
-      let novo = request.resource.data.get('documento', null);
-      return novo == anterior
-        || (novo == null
-            && existsAfter(caminhoDocumentos(userId))
-            && getAfter(caminhoDocumentos(userId)).data.cpf == anterior);
+    // Índice de CPFs: cpfs/{11 números} → { uid } (um CPF, uma conta).
+    function caminhoCpf(numero) {
+      return /databases/$(database)/documents/cpfs/$(numero);
+    }
+
+    function somenteNumeros(cpf) {
+      return cpf.replace('[^0-9]', '');
     }
 
     // O perfil pertence a uma família da qual o usuário atual é membro.
@@ -387,13 +383,12 @@ service cloud.firestore {
         && dadosPessoaisValidos(request.resource.data)
         && vinculoDeFamiliaValido(null);
 
-      // uid, email e criadoEm não podem mudar; o CPF antigo (documento)
-      // só sai para a área privada. grupoId só muda pelo fluxo de família/convite.
+      // uid, email e criadoEm não podem mudar; o CPF nunca fica aqui
+      // (área privada). grupoId só muda pelo fluxo de família/convite.
       allow update: if autenticado()
         && meuUid() == userId
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nome', 'telefone', 'documento', 'endereco', 'enderecoDetalhado', 'atualizadoEm', 'grupoId', 'foto'])
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nome', 'telefone', 'endereco', 'enderecoDetalhado', 'atualizadoEm', 'grupoId', 'foto'])
         && dadosPessoaisValidos(request.resource.data)
-        && documentoSoSaiParaAreaPrivada(userId)
         && vinculoDeFamiliaValido(resource.data.get('grupoId', null));
 
       // Excluir a conta: só o dono, e depois de sair da família.
@@ -404,7 +399,8 @@ service cloud.firestore {
       // Dados sensíveis (CPF): SÓ o dono lê; a família não.
       // O CPF é gravado uma única vez e nunca muda. Só é apagado junto
       // com o perfil (excluir a conta), para não dar para trocá-lo.
-      // Conta antiga: tem que ser o mesmo CPF que estava no perfil.
+      // No mesmo lote, o índice cpfs/{número} tem que ficar com o dono
+      // (e ele só é criado se o CPF estiver livre: um CPF, uma conta).
       match /privado/{documentoId} {
         allow read: if autenticado() && meuUid() == userId;
 
@@ -413,18 +409,13 @@ service cloud.firestore {
           && documentoId == 'documentos'
           && request.resource.data.keys().hasOnly(['cpf'])
           && cpfFormatado(request.resource.data.cpf)
-          && (!exists(caminhoUsuario(userId))
-              || get(caminhoUsuario(userId)).data.get('documento', request.resource.data.cpf) == request.resource.data.cpf);
+          && getAfter(caminhoCpf(somenteNumeros(request.resource.data.cpf))).data.uid == userId;
 
         allow update: if false;
 
         allow delete: if autenticado()
           && meuUid() == userId
           && !existsAfter(caminhoUsuario(userId));
-      }
-
-      match /conquistas/{conquistaId} {
-        allow read, write: if autenticado() && meuUid() == userId;
       }
 
       // Só o dono lê e altera os próprios lugares. A leitura do perfil
@@ -487,8 +478,9 @@ service cloud.firestore {
               : 'membro'
           );
 
-        // O próprio membro só pode sincronizar a cópia do nome
-        // com usuarios/{uid}, na mesma gravação do perfil.
+        // O próprio membro pode sincronizar a cópia do nome com
+        // usuarios/{uid} (na mesma gravação do perfil) e marcar o
+        // "Estou bem" (só a hora do servidor, nunca outra data).
         // A outra mudança é o administrador que sai passar o papel
         // para quem ele indicou em administradorUid (mesmo lote).
         // status, uid e demais campos não mudam.
@@ -497,6 +489,9 @@ service cloud.firestore {
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nome'])
             && nomeValido(request.resource.data.nome)
             && request.resource.data.nome == getAfter(caminhoUsuario(meuUid())).data.nome)
+          || (membroUid == meuUid()
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['estouBemEm'])
+            && request.resource.data.estouBemEm == request.time)
           || (membroUid != meuUid()
             && get(caminhoGrupo(grupoId)).data.administradorUid == meuUid()
             && getAfter(caminhoGrupo(grupoId)).data.administradorUid == membroUid
@@ -614,7 +609,31 @@ service cloud.firestore {
       allow delete: if autenticado() && resource.data.uid == meuUid();
     }
 
-    // A coleção antiga "solicitacoes" (entrada por código)
-    // não é mais usada e fica bloqueada pela regra padrão.
+    // ---------------------------------------------------
+    // ÍNDICE DE CPFs: cpfs/{11 números} → { uid }. Um CPF só pode
+    // ter uma conta: criar só funciona se o número estiver livre
+    // (se já existe, a gravação vira "update", que é proibido).
+    // Ler responde só "livre" (não existe) ou "é seu"; de outra
+    // pessoa a leitura é recusada (o app mostra "CPF já cadastrado").
+    // Sai junto com o CPF privado, ao excluir a conta.
+    // ---------------------------------------------------
+
+    match /cpfs/{numero} {
+      allow get: if autenticado()
+        && (resource == null || resource.data.uid == meuUid());
+      allow list: if false;
+
+      allow create: if autenticado()
+        && numero.matches('^[0-9]{11}$')
+        && request.resource.data.keys().hasOnly(['uid'])
+        && request.resource.data.uid == meuUid()
+        && getAfter(caminhoDocumentos(meuUid())).data.cpf.replace('[^0-9]', '') == numero;
+
+      allow update: if false;
+
+      allow delete: if autenticado()
+        && resource.data.uid == meuUid()
+        && !existsAfter(caminhoDocumentos(meuUid()));
+    }
   }
 }

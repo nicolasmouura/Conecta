@@ -1,3 +1,8 @@
+/*
+ * Cartão de Meu Perfil: foto e dados pessoais (e-mail, CPF mascarado,
+ * telefone e endereço).
+ */
+
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 

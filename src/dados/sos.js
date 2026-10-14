@@ -1,3 +1,8 @@
+/*
+ * Alertas de SOS (alertasSOS): acionar, encerrar e ouvir os alertas
+ * ativos da família e o próprio.
+ */
+
 import {
   addDoc,
   collection,

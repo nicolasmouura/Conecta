@@ -1,3 +1,7 @@
+/*
+ * Marcador de um familiar no mapa, com a foto de perfil.
+ */
+
 import { useEffect, useState } from 'react';
 import { Marker } from 'react-native-maps';
 import { StyleSheet, Text, View } from 'react-native';

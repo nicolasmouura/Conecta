@@ -1,3 +1,8 @@
+/*
+ * Convite recebido (na tela de quem ainda não tem família): mostra a
+ * família e quem convidou, com Aceitar e Recusar.
+ */
+
 import { useEffect, useState } from 'react';
 
 import {

@@ -1,3 +1,8 @@
+/*
+ * Foto de perfil redonda (ou círculo cinza, sem foto), usada no
+ * perfil, nos cards e no mapa.
+ */
+
 import { Image, StyleSheet, View } from 'react-native';
 import { cores } from '../theme/theme';
 

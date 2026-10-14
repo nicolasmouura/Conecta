@@ -28,9 +28,6 @@
       ],
       "package": "com.conecta"
     },
-    "web": {
-      "favicon": "./assets/favicon.png"
-    },
     "plugins": [
       [
         "expo-local-authentication",

@@ -1,3 +1,8 @@
+/*
+ * Meus lugares (a Casa): salvar e ouvir, e calcular se a pessoa está
+ * em casa ou a que distância (arredondada, para proteger o endereço).
+ */
+
 import {
   collection,
   doc,

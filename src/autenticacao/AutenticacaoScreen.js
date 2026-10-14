@@ -1,3 +1,9 @@
+/*
+ * Tela de entrada: boas-vindas, cadastro (nome, e-mail, CPF, telefone
+ * e senha; o endereço é pedido depois, em Meu Perfil), login e "Esqueci
+ * minha senha", pelo Firebase Authentication.
+ */
+
 import { useState } from 'react';
 import {
   Alert,
@@ -14,6 +20,7 @@ import {
 
 import {
   createUserWithEmailAndPassword,
+  deleteUser,
   sendEmailVerification,
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
@@ -46,7 +53,6 @@ export default function AutenticacaoScreen({ onAutenticado, aviso }) {
   // Somente no cadastro
   const [cpf, setCpf] = useState('');
   const [telefone, setTelefone] = useState('');
-  const [endereco, setEndereco] = useState('');
   const [confirmacao, setConfirmacao] = useState('');
 
   const [erro, setErro] = useState(aviso || '');
@@ -68,7 +74,6 @@ export default function AutenticacaoScreen({ onAutenticado, aviso }) {
           email,
           cpf,
           telefone,
-          endereco,
           senha,
           confirmacao,
         });
@@ -91,6 +96,21 @@ export default function AutenticacaoScreen({ onAutenticado, aviso }) {
           email: resultado.user.email,
         };
 
+        // Um perfil por CPF: se o CPF já tem conta, o login recém-criado
+        // é apagado (não sobra conta sem perfil) e o e-mail fica livre.
+        // O endereço não é pedido aqui: fica obrigatório em Meu Perfil.
+        try {
+          await salvarPerfilUsuario({ ...usuario, cpf, telefone });
+        } catch (erroPerfil) {
+          if (erroPerfil.message === 'CPF_JA_CADASTRADO') {
+            await deleteUser(resultado.user).catch((erroApagar) =>
+              console.log('Login sem perfil não apagado:', erroApagar.code || erroApagar.message)
+            );
+          }
+
+          throw erroPerfil;
+        }
+
         // Link de confirmação do e-mail: o app só libera depois dele
         // (VerificarEmail). Se o envio falhar, dá para reenviar lá.
         await sendEmailVerification(resultado.user).catch((erroEnvio) =>
@@ -102,13 +122,6 @@ export default function AutenticacaoScreen({ onAutenticado, aviso }) {
         await guardarSenhaOffline(usuario.uid, senha).catch((erroHash) =>
           console.log('Hash da senha não guardado:', erroHash.message)
         );
-
-        await salvarPerfilUsuario({
-          ...usuario,
-          cpf,
-          telefone,
-          endereco,
-        });
 
         console.log('Conta criada:', usuario.uid);
 
@@ -133,13 +146,15 @@ export default function AutenticacaoScreen({ onAutenticado, aviso }) {
     } catch (e) {
       // Senha errada, e-mail já usado etc. são respostas esperadas,
       // não falhas do app: não abrem a caixa vermelha de erro.
-      if (e.code?.startsWith('auth/')) {
-        console.log('Autenticação recusada:', e.code);
+      if (e.code?.startsWith('auth/') || e.message === 'CPF_JA_CADASTRADO') {
+        console.log('Autenticação recusada:', e.code || e.message);
       } else {
         console.error('Erro na autenticação:', e);
       }
 
-      if (e.code === 'auth/email-already-in-use') {
+      if (e.message === 'CPF_JA_CADASTRADO') {
+        setErro('Este CPF já está cadastrado em outra conta.');
+      } else if (e.code === 'auth/email-already-in-use') {
         setErro('Este e-mail já possui uma conta.');
       } else if (e.code === 'auth/invalid-email') {
         setErro('Digite um e-mail válido.');
@@ -346,19 +361,6 @@ export default function AutenticacaoScreen({ onAutenticado, aviso }) {
               maxLength={20}
             />
 
-            <Text style={styles.label}>
-              Endereço
-            </Text>
-
-            <TextInput
-              style={styles.input}
-              placeholder="Rua, número, bairro, cidade - UF"
-              placeholderTextColor={cores.textoSecundario}
-              value={endereco}
-              onChangeText={setEndereco}
-              autoCapitalize="words"
-              maxLength={120}
-            />
           </>
         )}
 

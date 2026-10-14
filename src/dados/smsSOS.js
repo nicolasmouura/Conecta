@@ -1,3 +1,8 @@
+/*
+ * SOS por SMS: monta a mensagem com a última posição e abre o app de
+ * mensagens com os telefones da família (funciona sem internet).
+ */
+
 import * as Location from 'expo-location';
 import * as SMS from 'expo-sms';
 

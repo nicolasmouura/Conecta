@@ -1,3 +1,8 @@
+/*
+ * Hook do botão voltar do Android para a navegação por estado do app
+ * (sem biblioteca de navegação).
+ */
+
 import { useEffect, useRef } from 'react';
 import { BackHandler } from 'react-native';
 

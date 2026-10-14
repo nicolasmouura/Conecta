@@ -1,9 +1,16 @@
+/*
+ * Fluxos pelo app inteiro: erros de cadastro e login, convite entre
+ * duas contas, sessão, editar perfil, biometria, casa pelo CEP, mapa e
+ * histórico, sair da família e excluir conta.
+ */
+
 import { Alert } from 'react-native';
 import { act, configure, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import {
   __confirmarEmail,
   auth,
   createUserWithEmailAndPassword,
+  deleteUser,
   reload,
   signOut,
 } from 'firebase/auth';
@@ -103,8 +110,19 @@ async function tocarNoAlerta(textoDoBotao) {
   await act(() => botoes.find((botao) => botao.text === textoDoBotao).onPress());
 }
 
+// Abre Meu Perfil e, se o cadastro obrigatório da casa abrir sozinho
+// (conta ainda sem endereço), fecha.
+async function abrirPerfil() {
+  await fireEvent.press((await screen.findAllByText('Meu Perfil'))[0]);
+  await waitFor(() => expect(screen.queryByText('Carregando seus dados...')).toBeNull());
+
+  if (screen.queryByText('Cadastrar Casa')) {
+    await fireEvent.press(screen.getByText('icone:x'));
+  }
+}
+
 async function sairDaConta() {
-  await fireEvent.press(screen.getAllByText('Meu Perfil')[0]);
+  await abrirPerfil();
   await fireEvent.press(await screen.findByText('Sair do aplicativo'));
   await tocarNoAlerta('Sair');
   expect(await screen.findByText('Se cadastrar')).toBeTruthy();
@@ -144,7 +162,6 @@ test('cadastro: mensagens de erro do formulário', async () => {
   await preencher('Seu e-mail', BRUNO.email);
   await preencher('000.000.000-00', '935.411.347-80');
   await preencher('(21) 98765-4321', '(21) 99999-0000');
-  await preencher('Rua, número, bairro, cidade - UF', 'Rua T, 1');
   await preencher('Sua senha', 'senha123');
   await preencher('Digite a senha novamente', 'senha124');
   await fireEvent.press(screen.getByText('Criar minha conta'));
@@ -153,6 +170,17 @@ test('cadastro: mensagens de erro do formulário', async () => {
   await preencher('Digite a senha novamente', 'senha123');
   await fireEvent.press(screen.getByText('Criar minha conta'));
   expect(await screen.findByText('Este e-mail já possui uma conta.')).toBeTruthy();
+
+  // CPF que já tem conta (o do Bruno): recusado, e o login recém-criado
+  // é desfeito, então o e-mail continua livre.
+  await preencher('Seu e-mail', 'teste@fluxo.com');
+  await preencher('000.000.000-00', BRUNO.cpf);
+  await fireEvent.press(screen.getByText('Criar minha conta'));
+  expect(await screen.findByText('Este CPF já está cadastrado em outra conta.')).toBeTruthy();
+  expect(auth.currentUser).toBeNull();
+
+  const { user } = await createUserWithEmailAndPassword(auth, 'teste@fluxo.com', 'senha123');
+  await deleteUser(user);
 });
 
 test('login: senha errada, conta inexistente e "Esqueci minha senha" sem e-mail', async () => {
@@ -181,7 +209,6 @@ test('Ana cria a família e convida o Bruno; Bruno aceita pela tela', async () =
   await preencher('Seu e-mail', ANA.email);
   await preencher('000.000.000-00', ANA.cpf);
   await preencher('(21) 98765-4321', '(21) 98765-4321');
-  await preencher('Rua, número, bairro, cidade - UF', 'Rua A, 1');
   await preencher('Sua senha', ANA.senha);
   await preencher('Digite a senha novamente', ANA.senha);
   await fireEvent.press(screen.getByText('Criar minha conta'));
@@ -243,7 +270,7 @@ test('reabrir o app restaura a sessão (depois da biometria); editar informaçõ
   // Sessão do Bruno guardada do teste anterior: entra direto.
   expect(await screen.findByText(/Bruno Lima/)).toBeTruthy();
 
-  await fireEvent.press(await screen.findByText('Meu Perfil'));
+  await abrirPerfil();
   await fireEvent.press(await screen.findByText('Editar informações'));
 
   await preencher('Seu nome completo', '   ');
@@ -260,6 +287,52 @@ test('reabrir o app restaura a sessão (depois da biometria); editar informaçõ
   expect(screen.getAllByText('Não editável')).toHaveLength(2);
 
   expect(erros).toEqual([]);
+});
+
+test('endereço obrigatório: sem casa, Meu Perfil abre o cadastro; salvo, não pede mais', async () => {
+  const Location = jest.requireMock('expo-location');
+
+  Location.geocodeAsync.mockResolvedValue([{ latitude: -23.5539, longitude: -46.6588 }]);
+  global.fetch = jest.fn(async () => ({
+    ok: true,
+    status: 200,
+    json: async () => ({ logradouro: 'Rua Augusta', bairro: 'Consolação', localidade: 'São Paulo', uf: 'SP' }),
+  }));
+
+  try {
+    // Sessão do Bruno guardada do teste anterior (ele ainda não tem casa).
+    await render(<App />);
+
+    await fireEvent.press(await screen.findByText('Meu Perfil'));
+    expect(await screen.findByText('Cadastrar Casa')).toBeTruthy();
+    expect(screen.getByText('Endereço obrigatório')).toBeTruthy();
+
+    await preencher('123', '50');
+    await preencher('00000-000', '01305000');
+    await waitFor(() =>
+      expect(screen.getByPlaceholderText('Rua Barata Ribeiro').props.value).toBe('Rua Augusta')
+    );
+
+    await fireEvent.press(screen.getByText('Localizar no mapa'));
+    await fireEvent.press(await screen.findByText('Salvar casa'));
+
+    await waitFor(() =>
+      expect(Alert.alert).toHaveBeenCalledWith('Endereço salvo', 'Sua casa também foi marcada no mapa.')
+    );
+    expect(screen.queryByText('Cadastrar Casa')).toBeNull();
+    expect(screen.queryByText('Endereço obrigatório')).toBeNull();
+
+    // Voltando ao Perfil, não pede mais.
+    await fireEvent.press(screen.getByLabelText('Voltar ao menu'));
+    await fireEvent.press(await screen.findByText('Meu Perfil'));
+    await waitFor(() => expect(screen.queryByText('Carregando seus dados...')).toBeNull());
+    expect(screen.queryByText('Cadastrar Casa')).toBeNull();
+    expect(screen.getAllByText(/Rua Augusta, 50/).length).toBeGreaterThan(0);
+
+    expect(erros).toEqual([]);
+  } finally {
+    delete global.fetch;
+  }
 });
 
 test('biometria: 3 falhas encerram a sessão e pedem e-mail e senha', async () => {
@@ -300,7 +373,7 @@ test('Meus lugares: cadastrar a casa pelo CEP, localizar e salvar', async () => 
     // Sessão da Ana guardada do teste anterior.
     await render(<App />);
 
-    await fireEvent.press(await screen.findByText('Meu Perfil'));
+    await abrirPerfil();
     await fireEvent.press(await screen.findByText('Meus lugares'));
     await fireEvent.press(await screen.findByText('Cadastrar'));
 
@@ -367,6 +440,49 @@ test('mapa e histórico com dados: posição da Ana pelo GPS e do Bruno no banco
   expect(erros).toEqual([]);
 });
 
+test('coração "Estou bem": avisa a família e aparece no card do mapa', async () => {
+  const { doc, getDoc } = jest.requireMock('firebase/firestore');
+  const { db } = jest.requireMock('../src/config/firebase');
+
+  // Sessão da Ana guardada do teste anterior.
+  await render(<App />);
+
+  const coracao = await screen.findByLabelText('Avisar a família que estou bem');
+
+  // Abrir a pergunta e cancelar (o "Cancelar" só fecha) não avisa nada.
+  await fireEvent.press(coracao);
+  const [titulo, , botoes] = Alert.alert.mock.calls.at(-1);
+  expect(titulo).toBe('Avisar que você está bem?');
+  expect(botoes.map((botao) => botao.text)).toEqual(['Cancelar', 'Avisar']);
+  expect(screen.queryByText(/Família avisada/)).toBeNull();
+
+  await fireEvent.press(coracao);
+  await tocarNoAlerta('Avisar');
+  expect(await screen.findByText(/Família avisada que você está bem \(\d{2}:\d{2}\)/)).toBeTruthy();
+
+  // Logo em seguida o coração fica bloqueado (evita avisos repetidos).
+  const chamadas = Alert.alert.mock.calls.length;
+  await fireEvent.press(screen.getByLabelText('Avisar a família que estou bem'));
+  expect(Alert.alert.mock.calls.length).toBe(chamadas);
+
+  // Gravado no registro da Ana na família.
+  const { grupoId } = (await getDoc(doc(db, 'usuarios', auth.currentUser.uid))).data();
+  const registro = await getDoc(doc(db, 'grupos', grupoId, 'membros', auth.currentUser.uid));
+  expect(registro.data().estouBemEm).toBeTruthy();
+
+  // No mapa: só o card da Ana mostra o aviso.
+  await fireEvent.press(screen.getAllByText('Mapa')[0]);
+  expect(await screen.findByText('Está bem · agora')).toBeTruthy();
+  expect(screen.getAllByText(/Está bem/)).toHaveLength(1);
+
+  // Sai do mapa antes de terminar: a lista de cards ainda atualiza
+  // depois de aparecer e cairia no teste seguinte.
+  await fireEvent.press(screen.getByLabelText('Voltar ao menu'));
+  expect(await screen.findByText('Minha Família')).toBeTruthy();
+
+  expect(erros).toEqual([]);
+});
+
 test('sair da família: a administradora sai e o Bruno assume', async () => {
   const { doc, getDoc } = jest.requireMock('firebase/firestore');
   const { db } = jest.requireMock('../src/config/firebase');
@@ -412,7 +528,7 @@ test('excluir conta: senha errada recusa; certa apaga tudo e a família', async 
   await render(<App />);
   await entrar(BRUNO);
 
-  await fireEvent.press(await screen.findByText('Meu Perfil'));
+  await abrirPerfil();
   await fireEvent.press(await screen.findByText('Excluir conta'));
 
   await fireEvent.press(screen.getByText('Excluir minha conta'));

@@ -1,3 +1,7 @@
+/*
+ * Selo sobre o mapa com o estado do compartilhamento da localização.
+ */
+
 import { StyleSheet, Text, View } from 'react-native';
 import { cores } from '../theme/theme';
 

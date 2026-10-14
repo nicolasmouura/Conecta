@@ -1,3 +1,7 @@
+/*
+ * Aviso no Menu enquanto houver SOS ativo na família.
+ */
+
 import { useEffect, useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';

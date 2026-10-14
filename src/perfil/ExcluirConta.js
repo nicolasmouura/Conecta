@@ -1,3 +1,8 @@
+/*
+ * Configurações → Excluir conta: explica o que será apagado, pede a
+ * senha e uma confirmação final.
+ */
+
 import { useState } from 'react';
 import {
   ActivityIndicator,

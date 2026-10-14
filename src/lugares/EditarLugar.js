@@ -1,3 +1,9 @@
+/*
+ * Cadastrar ou editar um lugar (Casa): endereço por campos, com o CEP
+ * preenchendo o resto pela ViaCEP, localizar no mapa e ajustar o
+ * alfinete.
+ */
+
 import { useRef, useState } from 'react';
 import {
   ActivityIndicator,

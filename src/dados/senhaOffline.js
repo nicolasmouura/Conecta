@@ -1,10 +1,13 @@
+/*
+ * Confere a senha da conta sem internet (para encerrar o SOS), por um
+ * hash com sal guardado no SecureStore.
+ */
+
 import * as Crypto from 'expo-crypto';
 import * as SecureStore from 'expo-secure-store';
 import { EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
 
 /*
- * Conferir a senha da conta SEM internet (encerrar o SOS).
- *
  * A cada login, cadastro ou senha conferida no Firebase, guarda no
  * SecureStore (criptografado pelo sistema) só um hash SHA-256 com sal
  * da senha da conta aberta: a senha em si nunca é guardada. Com

@@ -1,3 +1,8 @@
+/*
+ * Testes das regras de dados: casa (em casa, distância arredondada),
+ * presença da família, rua atual, biometria e CPF.
+ */
+
 import { classificarResultado, MAXIMO_FALHAS, proximoPasso } from '../src/dados/biometria';
 import { criarCacheRua, nomeDaRua } from '../src/dados/enderecos';
 import { arredondarDistanciaCasa, calcularEstadoCasa } from '../src/dados/lugares';

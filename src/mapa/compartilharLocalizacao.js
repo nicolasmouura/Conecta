@@ -1,3 +1,9 @@
+/*
+ * Hook que compartilha a localização enquanto o app está aberto:
+ * permissão, GPS, envio para a família (com rua e situação da casa) e
+ * pontos do histórico.
+ */
+
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, Linking } from 'react-native';
 import * as Location from 'expo-location';

@@ -1,3 +1,9 @@
+/*
+ * Localização da família (familiares/{uid}): enviar a própria posição,
+ * ouvir a da família, decidir quando enviar e montar os marcadores do
+ * mapa.
+ */
+
 import {
   collection,
   doc,

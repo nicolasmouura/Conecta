@@ -1,3 +1,9 @@
+/*
+ * Tela de biometria obrigatória: pede o reconhecimento facial (ou
+ * outra biometria) ao abrir o app e ao voltar do segundo plano; 3
+ * falhas encerram a sessão.
+ */
+
 import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,

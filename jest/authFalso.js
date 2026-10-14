@@ -1,12 +1,16 @@
+/*
+ * Simulação do Firebase Authentication usada nos testes do app (npm
+ * test).
+ */
+
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 
 import { gerarId } from './firestoreFalso';
 
 /*
- * Simulação do Firebase Authentication para os testes (jest.setup.js
- * troca 'firebase/auth' por este arquivo). Foram as "contasLocais" do
- * app enquanto os dados ficavam só no aparelho.
+ * O jest.setup.js troca 'firebase/auth' por este arquivo. Foram as
+ * "contasLocais" do app enquanto os dados ficavam só no aparelho.
  *
  * Mesmos nomes de função e mesmos códigos de erro ('auth/...') de
  * 'firebase/auth'. Contas e sessão no AsyncStorage simulado; a senha

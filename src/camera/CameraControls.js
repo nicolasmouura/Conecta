@@ -1,3 +1,7 @@
+/*
+ * Botões da câmera da foto de perfil: virar a câmera e tirar a foto.
+ */
+
 import { Image, StyleSheet, TouchableOpacity, View, Text } from 'react-native';
 import { fontes } from '../theme/theme';
 

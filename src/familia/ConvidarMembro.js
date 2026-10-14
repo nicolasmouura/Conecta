@@ -1,3 +1,8 @@
+/*
+ * Janela "Convidar familiar": nome completo e e-mail cadastrados da
+ * pessoa e envio do convite.
+ */
+
 import { useState } from 'react';
 
 import {

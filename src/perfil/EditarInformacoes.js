@@ -1,3 +1,8 @@
+/*
+ * Configurações → Editar informações: nome, telefone e endereço (que
+ * é a Casa); e-mail e CPF aparecem bloqueados.
+ */
+
 import { useEffect, useState } from 'react';
 import {
   StyleSheet,
@@ -12,7 +17,6 @@ import EditarLugar from '../lugares/EditarLugar';
 import BotaoVoltar from '../navegacao/BotaoVoltar';
 import { observarLugar, salvarLugar, TIPOS_LUGAR } from '../dados/lugares';
 import {
-  cpfValido,
   LIMITES_PERFIL,
   mascararDocumento,
   montarAlteracoes,
@@ -59,7 +63,6 @@ export default function EditarInformacoes({
     telefone: perfil.telefone,
     endereco: perfil.endereco,
     enderecoDetalhado: perfil.enderecoDetalhado,
-    cpf: '',
   });
 
   // Casa salva (undefined = carregando).
@@ -68,9 +71,6 @@ export default function EditarInformacoes({
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState('');
   const [sucesso, setSucesso] = useState('');
-
-  // Conta antiga sem CPF: pode informar uma única vez.
-  const semCPF = !perfil.documento;
 
   useEffect(() => {
     return observarLugar(perfil.uid, 'casa', setCasa, (e) => {
@@ -108,19 +108,14 @@ export default function EditarInformacoes({
       return;
     }
 
-    if (semCPF && dados.cpf && !cpfValido(dados.cpf)) {
-      setErro('Digite um CPF válido.');
-      return;
-    }
-
     try {
       setErro('');
       setSucesso('');
       setSalvando(true);
 
-      const salvos = await onSalvar(montarAlteracoes(perfil, dados));
+      const salvos = await onSalvar(montarAlteracoes(dados));
 
-      setDados((atuais) => ({ ...atuais, ...salvos, cpf: '' }));
+      setDados((atuais) => ({ ...atuais, ...salvos }));
       setSucesso('Dados atualizados com sucesso.');
     } catch (e) {
       console.error('Erro ao atualizar perfil:', e.code || e.message);
@@ -150,26 +145,7 @@ export default function EditarInformacoes({
 
       <CampoBloqueado label="E-mail" valor={perfil.email} />
 
-      {semCPF ? (
-        <>
-          <Text style={styles.label}>CPF</Text>
-          <TextInput
-            style={styles.input}
-            value={dados.cpf}
-            onChangeText={(valor) => alterarCampo('cpf', valor)}
-            placeholder="000.000.000-00"
-            placeholderTextColor={cores.textoSecundario}
-            keyboardType="number-pad"
-            maxLength={14}
-            editable={!salvando}
-          />
-          <Text style={styles.dica}>
-            Informe uma única vez: depois de salvo, o CPF não pode ser alterado.
-          </Text>
-        </>
-      ) : (
-        <CampoBloqueado label="CPF" valor={mascararDocumento(perfil.documento)} />
-      )}
+      <CampoBloqueado label="CPF" valor={mascararDocumento(perfil.documento)} />
 
       <Text style={styles.label}>Telefone</Text>
       <TextInput

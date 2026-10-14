@@ -1,3 +1,8 @@
+/*
+ * Botão "‹ Menu" das telas abertas pelo Menu, abaixo da área segura
+ * (notch), e o espaço que essas telas deixam no topo.
+ */
+
 import { StyleSheet, Text, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 

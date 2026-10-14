@@ -1,8 +1,11 @@
+/*
+ * Ponto de entrada do Expo: registra o App como componente principal.
+ */
+
 import { registerRootComponent } from 'expo';
 
 import App from './App';
 
-// registerRootComponent calls AppRegistry.registerComponent('main', () => App);
-// It also ensures that whether you load the app in Expo Go or in a native build,
-// the environment is set up appropriately
+// Equivale a AppRegistry.registerComponent('main', () => App), e prepara
+// o ambiente igual no Expo Go e num build próprio.
 registerRootComponent(App);

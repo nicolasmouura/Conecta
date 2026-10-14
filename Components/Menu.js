@@ -1,4 +1,14 @@
+/*
+ * Tela inicial (Menu): saudação, coração "Estou bem", mapa com a sua
+ * posição e o estado do compartilhamento, atalhos para Minha Família,
+ * Mapa, Histórico e Meu Perfil, botão de SOS e aviso de SOS ativo na
+ * família.
+ */
+
+import { useEffect, useState } from 'react';
+
 import {
+  Alert,
   ScrollView,
   StyleSheet,
   Text,
@@ -9,6 +19,8 @@ import {
 import { Feather } from '@expo/vector-icons';
 import MapView, { Marker } from 'react-native-maps';
 
+import { avisarQueEstouBem } from '../src/dados/estouBem';
+import { formatarHorario } from '../src/dados/historico';
 import { descreverLocalizacao } from '../src/mapa/compartilharLocalizacao';
 import AvisoSOS from '../src/sos/AvisoSOS';
 
@@ -46,6 +58,9 @@ const OPCOES = [
   },
 ];
 
+// Intervalo mínimo entre dois avisos de "Estou bem".
+const ESPERA_ESTOU_BEM = 30 * 1000;
+
 export default function Menu({
   onSelect,
   nome,
@@ -56,6 +71,52 @@ export default function Menu({
   // Estado vindo de useCompartilharLocalizacao (App.js)
   const localizacao = estadoLocalizacao.coordenadas;
   const descricao = descreverLocalizacao(estadoLocalizacao);
+
+  // "Estou bem": hora do último aviso nesta sessão (para o retorno na tela).
+  const [avisadoEm, setAvisadoEm] = useState(null);
+  const [aguardando, setAguardando] = useState(false);
+
+  // Um aviso a cada 30 s no máximo: evita mandar vários por engano.
+  useEffect(() => {
+    if (!aguardando) return undefined;
+
+    const espera = setTimeout(() => setAguardando(false), ESPERA_ESTOU_BEM);
+
+    return () => clearTimeout(espera);
+  }, [aguardando]);
+
+  function enviarEstouBem() {
+    const momento = Date.now();
+
+    setAvisadoEm(momento);
+    setAguardando(true);
+
+    // Sem internet, o Firebase guarda e envia quando a conexão voltar.
+    avisarQueEstouBem(grupoId, uidAtual).catch((erro) => {
+      console.log('"Estou bem" não enviado:', erro.code || erro.message);
+      setAvisadoEm(null);
+      Alert.alert('Não foi possível avisar', 'Tente novamente em instantes.');
+    });
+  }
+
+  function tocarCoracao() {
+    if (!grupoId) {
+      Alert.alert(
+        'Estou bem',
+        'Entre em uma família para avisar que você está bem.'
+      );
+      return;
+    }
+
+    Alert.alert(
+      'Avisar que você está bem?',
+      'Sua família vai ver "Está bem" no seu card do mapa.',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        { text: 'Avisar', onPress: enviarEstouBem },
+      ]
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -79,14 +140,33 @@ export default function Menu({
             </Text>
           </View>
 
-          <View style={styles.logoMini}>
+          <TouchableOpacity
+            style={[
+              styles.coracao,
+              avisadoEm && styles.coracaoAvisado,
+            ]}
+            onPress={tocarCoracao}
+            disabled={aguardando}
+            accessibilityRole="button"
+            accessibilityLabel="Avisar a família que estou bem"
+          >
             <Feather
               name="heart"
               size={24}
-              color={cores.primaria}
+              color={
+                avisadoEm
+                  ? cores.textoSobrePrimaria
+                  : cores.primaria
+              }
             />
-          </View>
+          </TouchableOpacity>
         </View>
+
+        {avisadoEm && (
+          <Text style={styles.avisado}>
+            Família avisada que você está bem ({formatarHorario(avisadoEm, false)}).
+          </Text>
+        )}
 
         <AvisoSOS
           grupoId={grupoId}
@@ -324,7 +404,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
 
-  logoMini: {
+  coracao: {
     width: 48,
     height: 48,
     borderRadius: 24,
@@ -332,6 +412,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     ...sombra,
+  },
+
+  coracaoAvisado: {
+    backgroundColor: cores.primaria,
+  },
+
+  avisado: {
+    fontSize: 13,
+    color: cores.primaria,
+    marginTop: -14,
+    marginBottom: 18,
   },
 
   cardLocalizacao: {

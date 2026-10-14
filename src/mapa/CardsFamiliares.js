@@ -1,3 +1,8 @@
+/*
+ * Cards dos familiares abaixo do mapa (foto, online, rua, casa,
+ * "Estou bem" e distância); tocar num card centraliza o mapa nele.
+ */
+
 import { FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 
@@ -43,6 +48,13 @@ function CardFamiliar({ card, selecionado, onPress }) {
           <View style={styles.linha}>
             <Feather name="home" size={12} color={cores.textoSecundario} />
             <Text style={styles.detalhe} numberOfLines={1}>{card.casa}</Text>
+          </View>
+        )}
+
+        {card.estouBem && (
+          <View style={styles.linha}>
+            <Feather name="heart" size={12} color={cores.primaria} />
+            <Text style={styles.estouBem} numberOfLines={1}>{card.estouBem}</Text>
           </View>
         )}
 
@@ -158,6 +170,12 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: cores.primaria,
     fontFamily: fontes.destaque,
+  },
+
+  estouBem: {
+    flex: 1,
+    fontSize: 13,
+    color: cores.primaria,
   },
 
   vazio: {

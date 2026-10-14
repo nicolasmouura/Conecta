@@ -1,3 +1,8 @@
+/*
+ * Tela de quem ainda não tem família: criar uma família ou aceitar um
+ * convite recebido.
+ */
+
 import { useState } from 'react';
 
 import {

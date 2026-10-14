@@ -1,5 +1,9 @@
+/*
+ * Testes da senha offline (hash) e da confirmação da senha para
+ * encerrar o SOS.
+ */
+
 import * as SecureStore from 'expo-secure-store';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import {
   __simularSemInternet,
@@ -12,10 +16,8 @@ import {
   conferirSenhaOffline,
   guardarSenhaOffline,
 } from '../src/dados/senhaOffline';
-import { limparDadosAntigos } from '../src/dados/limparDadosAntigos';
 
 // Firebase e SecureStore simulados em jest.setup.js.
-const cofre = jest.requireMock('expo-secure-store').__cofre;
 const codigoDoErro = (promessa) => promessa.then(() => null, (e) => e.code);
 
 let eu;
@@ -99,31 +101,5 @@ describe('confirmarSenhaDaConta (encerrar SOS)', () => {
   test('senha vazia ou sem usuário', async () => {
     expect(await codigoDoErro(confirmarSenhaDaConta(eu, ''))).toBe('auth/missing-password');
     expect(await codigoDoErro(confirmarSenhaDaConta(null, 'senha123'))).toBe('auth/user-mismatch');
-  });
-});
-
-describe('limparDadosAntigos (fase "dados só no aparelho")', () => {
-  test('apaga banco, contas, sessão e senhas antigas; mantém o resto', async () => {
-    await AsyncStorage.multiSet([
-      ['@conecta:banco:usuarios/u1', '{}'],
-      ['@conecta:banco:grupos/g1/membros/u1', '{}'],
-      ['@conecta:contas', JSON.stringify({ 'a@x.com': { uid: 'u1', email: 'a@x.com' } })],
-      ['@conecta:sessao', 'u1'],
-      ['@conecta:outra-coisa', 'fica'],
-    ]);
-    cofre.set('conecta.senha.u1', 'senha-antiga');
-
-    expect(await limparDadosAntigos()).toBe(4);
-
-    const chaves = await AsyncStorage.getAllKeys();
-
-    expect(chaves.some((chave) => chave.startsWith('@conecta:banco:'))).toBe(false);
-    expect(chaves).not.toContain('@conecta:contas');
-    expect(chaves).not.toContain('@conecta:sessao');
-    expect(chaves).toContain('@conecta:outra-coisa');
-    expect(cofre.has('conecta.senha.u1')).toBe(false);
-
-    // Na próxima abertura não há mais nada para apagar.
-    expect(await limparDadosAntigos()).toBe(0);
   });
 });

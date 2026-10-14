@@ -1,3 +1,8 @@
+/*
+ * Convites para a família: enviar (pelo nome completo + e-mail
+ * cadastrados), ouvir os recebidos e os pendentes, aceitar e recusar.
+ */
+
 import {
   arrayUnion,
   collection,

@@ -1,3 +1,8 @@
+/*
+ * Teste de fumaça: abre o app inteiro, cadastra, confirma o e-mail,
+ * cria a família, passa por todas as telas, sai e entra de novo.
+ */
+
 import { Alert } from 'react-native';
 import { act, configure, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import * as SecureStore from 'expo-secure-store';
@@ -96,7 +101,6 @@ test('cadastro → família → todas as telas do menu → sair, sem quebrar', a
   await preencher('Seu e-mail', 'ana@teste.com');
   await preencher('000.000.000-00', '529.982.247-25');
   await preencher('(21) 98765-4321', '(21) 98765-4321');
-  await preencher('Rua, número, bairro, cidade - UF', 'Rua Teste, 10, Centro, Rio de Janeiro - RJ');
   await preencher('Sua senha', 'senha123');
   await preencher('Digite a senha novamente', 'senha123');
   await fireEvent.press(screen.getByText('Criar minha conta'));
@@ -129,12 +133,24 @@ test('cadastro → família → todas as telas do menu → sair, sem quebrar', a
   // O cadastro guardou o hash da senha (SOS sem internet).
   expect(await SecureStore.getItemAsync('conecta.senhaOffline')).toContain('"hash"');
 
-  for (const opcao of ['Minha Família', 'Mapa', 'Histórico', 'Meu Perfil']) {
+  // O cadastro não pede endereço.
+  expect(screen.queryByPlaceholderText('Rua, número, bairro, cidade - UF')).toBeNull();
+
+  for (const opcao of ['Minha Família', 'Mapa', 'Histórico']) {
     await fireEvent.press(screen.getAllByText(opcao)[0]);
     await waitFor(() => expect(screen.getByLabelText('Voltar ao menu')).toBeTruthy());
     await act(() => new Promise((resolve) => setTimeout(resolve, 50)));
     await voltarAoMenu();
   }
+
+  // Meu Perfil sem endereço: o cadastro da casa abre sozinho; fechado,
+  // fica o aviso de endereço obrigatório.
+  await fireEvent.press(screen.getAllByText('Meu Perfil')[0]);
+  expect(await screen.findByText('Cadastrar Casa')).toBeTruthy();
+  await fireEvent.press(screen.getByText('icone:x'));
+  expect(await screen.findByText('Endereço obrigatório')).toBeTruthy();
+  expect(screen.queryByText('Cadastrar Casa')).toBeNull();
+  await voltarAoMenu();
 
   // SOS: abre a tela (sem acionar).
   await fireEvent.press(screen.getByText(/SOS/, { exact: false }));
@@ -142,7 +158,9 @@ test('cadastro → família → todas as telas do menu → sair, sem quebrar', a
   await voltarAoMenu();
 
   // Sair: Meu Perfil → Configurações → Sair do aplicativo → confirmar.
+  // (O cadastro da casa abre de novo: ainda não há endereço.)
   await fireEvent.press(screen.getAllByText('Meu Perfil')[0]);
+  await fireEvent.press(await screen.findByText('icone:x'));
   await fireEvent.press(await screen.findByText('Sair do aplicativo'));
 
   const [, , botoes] = Alert.alert.mock.calls.at(-1);

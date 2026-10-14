@@ -1,3 +1,7 @@
+/*
+ * Testes da busca de CEP na ViaCEP (com o fetch simulado).
+ */
+
 import { buscarCEP } from '../src/dados/enderecos';
 
 function resposta(status, corpo) {

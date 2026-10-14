@@ -1,3 +1,8 @@
+/*
+ * Testes do SOS: observar os alertas e encerrar o próprio SOS com
+ * biometria ou senha (inclusive sem internet).
+ */
+
 import { Alert } from 'react-native';
 import { configure, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import * as LocalAuthentication from 'expo-local-authentication';

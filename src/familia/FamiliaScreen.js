@@ -1,3 +1,8 @@
+/*
+ * Tela Minha Família: nome da família, membros e convites pendentes,
+ * convidar familiar e sair da família.
+ */
+
 import { useState, useEffect } from 'react';
 
 import {
@@ -15,7 +20,6 @@ import GrupoScreen from '../grupo/GrupoScreen';
 
 import {
   buscarGrupoPorId,
-  garantirRegistroMembro,
   observarMembros,
   sairDaFamilia,
 } from '../dados/grupo';
@@ -98,10 +102,6 @@ export default function FamiliaScreen({
         }
 
         setGrupoInfo(grupo);
-
-        await garantirRegistroMembro(grupo, usuario);
-
-        if (!ativo) return;
 
         cancelarMembros = observarMembros(
           grupoId,

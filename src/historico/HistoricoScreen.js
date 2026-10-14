@@ -1,3 +1,8 @@
+/*
+ * Tela Histórico: escolher o membro e o período (hoje, ontem, 7 dias)
+ * e ver a rota no mapa.
+ */
+
 import { useEffect, useRef, useState } from 'react';
 
 import {

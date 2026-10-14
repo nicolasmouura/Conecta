@@ -1,9 +1,13 @@
+/*
+ * Testes do banco no Emulador do Firestore, com as regras de verdade:
+ * o app de ponta a ponta e tudo o que deve ser negado.
+ */
+
 import { assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
 import {
   addDoc,
   collection,
   deleteDoc,
-  deleteField,
   doc,
   getDoc,
   getDocs,
@@ -22,12 +26,12 @@ import {
   buscarPerfisDosMembros,
   chaveDiretorio,
   garantirEntradaDiretorio,
-  protegerDocumento,
   salvarFotoPerfil,
   salvarPerfilUsuario,
 } from '../src/dados/salvarUsuario';
 import { buscarGrupoPorId, criarGrupo, observarMembros, sairDaFamilia } from '../src/dados/grupo';
 import { excluirConta } from '../src/dados/conta';
+import { avisarQueEstouBem, descreverEstouBem } from '../src/dados/estouBem';
 import {
   aceitarConvite,
   enviarConvite,
@@ -173,6 +177,16 @@ describe('1. cadastro', () => {
     );
 
     expect(indice.data()).toEqual({ uid: pessoa.uid });
+
+    // O CPF ficou na área privada e no índice de CPFs (um CPF, uma conta).
+    const [privado, cpf] = await semRegras((db) =>
+      Promise.all([
+        getDoc(doc(db, 'usuarios', pessoa.uid, 'privado', 'documentos')),
+        getDoc(doc(db, 'cpfs', pessoa.cpf.replace(/\D/g, ''))),
+      ])
+    );
+    expect(privado.data()).toEqual({ cpf: pessoa.cpf });
+    expect(cpf.data()).toEqual({ uid: pessoa.uid });
 
     // Entrar de novo no app não duplica nem quebra.
     await expect(garantirEntradaDiretorio(pessoa.uid)).resolves.toBeUndefined();
@@ -610,6 +624,47 @@ describe('8. SOS', () => {
   });
 });
 
+describe('8b. "Estou bem"', () => {
+  test('Bruno avisa; a família vê na hora no registro dele', async () => {
+    entrarComo(BRUNO);
+    await avisarQueEstouBem(grupo.id, BRUNO.uid);
+
+    entrarComo(ANA);
+    const membros = await emissaoQue(
+      (ok, erro) => observarMembros(grupo.id, ok, erro),
+      (lista) => lista.some((membro) => membro.uid === BRUNO.uid && membro.estouBemEm)
+    );
+    const bruno = membros.find((membro) => membro.uid === BRUNO.uid);
+
+    expect(descreverEstouBem(bruno.estouBemEm, Date.now())).toBe('Está bem · agora');
+  });
+
+  test('ninguém avisa por outra pessoa nem inventa o horário', async () => {
+    let db = entrarComo(ANA);
+    await assertFails(avisarQueEstouBem(grupo.id, BRUNO.uid));
+
+    db = entrarComo(BRUNO);
+    await assertFails(
+      updateDoc(doc(db, 'grupos', grupo.id, 'membros', BRUNO.uid), {
+        estouBemEm: new Date(Date.now() + 24 * 60 * 60 * 1000),
+      })
+    );
+    // Junto com outro campo (ex.: virar administrador) também não.
+    await assertFails(
+      updateDoc(doc(db, 'grupos', grupo.id, 'membros', BRUNO.uid), {
+        estouBemEm: serverTimestamp(),
+        papel: 'administrador',
+      })
+    );
+  });
+
+  test('quem é de fora não avisa na família', async () => {
+    entrarComo(CARLOS);
+
+    await assertFails(avisarQueEstouBem(grupo.id, CARLOS.uid));
+  });
+});
+
 describe('9. CPF só para o dono', () => {
   test('a família lê o perfil, mas sem o CPF (nem pela API)', async () => {
     const db = entrarComo(BRUNO);
@@ -656,82 +711,75 @@ describe('9. CPF só para o dono', () => {
   });
 });
 
-describe('10. conta antiga com CPF no perfil', () => {
-  const DAVI = { uid: 'davi', email: 'davi@teste.com', nome: 'Davi Rocha', cpf: '935.411.347-80' };
+describe('10. um CPF, uma conta', () => {
+  const OUTRA = { uid: 'outra', email: 'outra@teste.com', nome: 'Outra Pessoa', telefone: '(21) 94444-3333' };
+  const numero = (cpf) => cpf.replace(/\D/g, '');
 
-  beforeAll(async () => {
-    // Perfil gravado antes da mudança: CPF no campo "documento".
-    await semRegras((db) =>
-      setDoc(doc(db, 'usuarios', DAVI.uid), {
-        nome: DAVI.nome,
-        email: DAVI.email,
-        uid: DAVI.uid,
-        criadoEm: new Date().toISOString(),
-        documento: DAVI.cpf,
-      })
-    );
+  test('cadastro com o CPF de outra conta é recusado (e nada é gravado)', async () => {
+    entrarComo(OUTRA);
+
+    await expect(salvarPerfilUsuario({ ...OUTRA, cpf: ANA.cpf })).rejects.toThrow('CPF_JA_CADASTRADO');
+
+    const perfil = await semRegras((db) => getDoc(doc(db, 'usuarios', OUTRA.uid)));
+    expect(perfil.exists()).toBe(false);
   });
 
-  test('não dá para tirar o CPF do perfil sem a cópia privada igual', async () => {
-    const db = entrarComo(DAVI);
+  test('nem gravando direto, sem passar pelo app', async () => {
+    const db = entrarComo(OUTRA);
+    const lote = writeBatch(db);
 
-    await assertFails(updateDoc(doc(db, 'usuarios', DAVI.uid), { documento: deleteField() }));
+    lote.set(doc(db, 'usuarios', OUTRA.uid), {
+      nome: OUTRA.nome,
+      uid: OUTRA.uid,
+      email: OUTRA.email,
+      criadoEm: new Date().toISOString(),
+    });
+    lote.set(doc(db, 'usuarios', OUTRA.uid, 'privado', 'documentos'), { cpf: ANA.cpf });
+    lote.set(doc(db, 'cpfs', numero(ANA.cpf)), { uid: OUTRA.uid });
+
+    await assertFails(lote.commit());
+  });
+
+  test('o índice só responde "livre" ou "é seu"; listar é proibido', async () => {
+    let db = entrarComo(OUTRA);
+
+    await assertFails(getDoc(doc(db, 'cpfs', numero(ANA.cpf))));
+    await assertSucceeds(getDoc(doc(db, 'cpfs', '98765432100')));
+    await assertFails(getDocs(collection(db, 'cpfs')));
+
+    db = entrarComo(ANA);
+    await assertSucceeds(getDoc(doc(db, 'cpfs', numero(ANA.cpf))));
+  });
+
+  test('CPF privado e índice só existem juntos, com o mesmo número', async () => {
+    const db = entrarComo(OUTRA);
+
+    await assertFails(setDoc(doc(db, 'cpfs', '98765432100'), { uid: OUTRA.uid }));
     await assertFails(
-      setDoc(doc(db, 'usuarios', DAVI.uid, 'privado', 'documentos'), { cpf: '111.444.777-35' })
+      setDoc(doc(db, 'usuarios', OUTRA.uid, 'privado', 'documentos'), { cpf: '987.654.321-00' })
     );
+
+    const lote = writeBatch(db);
+
+    lote.set(doc(db, 'usuarios', OUTRA.uid, 'privado', 'documentos'), { cpf: '987.654.321-00' });
+    lote.set(doc(db, 'cpfs', '24681357928'), { uid: OUTRA.uid });
+
+    await assertFails(lote.commit());
   });
 
-  test('no login o CPF é movido para a área privada', async () => {
-    entrarComo(DAVI);
+  test('com um CPF livre, cadastra normalmente', async () => {
+    entrarComo(OUTRA);
 
-    expect((await buscarPerfil(DAVI.uid)).documento).toBe(DAVI.cpf);
-    expect(await protegerDocumento(DAVI.uid)).toBe(true);
+    await salvarPerfilUsuario({ ...OUTRA, cpf: '987.654.321-00' });
 
-    const [perfil, privado] = await semRegras((db) =>
-      Promise.all([
-        getDoc(doc(db, 'usuarios', DAVI.uid)),
-        getDoc(doc(db, 'usuarios', DAVI.uid, 'privado', 'documentos')),
-      ])
-    );
-
-    expect(perfil.data()).not.toHaveProperty('documento');
-    expect(privado.data()).toEqual({ cpf: DAVI.cpf });
-    expect((await buscarPerfil(DAVI.uid)).documento).toBe(DAVI.cpf);
-
-    // Próximo login: nada a fazer.
-    expect(await protegerDocumento(DAVI.uid)).toBe(false);
+    expect((await buscarPerfil(OUTRA.uid)).documento).toBe('987.654.321-00');
   });
 
-  test('conta antiga sem CPF informa uma única vez', async () => {
-    const EVA = { uid: 'eva', email: 'eva@teste.com', nome: 'Eva Melo' };
+  test('enquanto a conta existe, o índice não muda nem é apagado', async () => {
+    const db = entrarComo(OUTRA);
 
-    await semRegras((db) =>
-      setDoc(doc(db, 'usuarios', EVA.uid), {
-        nome: EVA.nome,
-        email: EVA.email,
-        uid: EVA.uid,
-        criadoEm: new Date().toISOString(),
-      })
-    );
-
-    entrarComo(EVA);
-
-    const salvo = await atualizarPerfil(EVA.uid, {
-      nome: EVA.nome,
-      telefone: '(21) 97777-6666',
-      cpf: '111.444.777-35',
-    });
-
-    expect(salvo.documento).toBe('111.444.777-35');
-    expect((await buscarPerfil(EVA.uid)).documento).toBe('111.444.777-35');
-
-    // Outro CPF depois: o app ignora (e as regras recusariam).
-    await atualizarPerfil(EVA.uid, {
-      nome: EVA.nome,
-      telefone: '(21) 97777-6666',
-      cpf: '529.982.247-25',
-    });
-    expect((await buscarPerfil(EVA.uid)).documento).toBe('111.444.777-35');
+    await assertFails(updateDoc(doc(db, 'cpfs', '98765432100'), { uid: 'outro-uid' }));
+    await assertFails(deleteDoc(doc(db, 'cpfs', '98765432100')));
   });
 });
 
@@ -847,7 +895,13 @@ describe('12. campos de texto com limite', () => {
   });
 });
 
-const HUGO = { uid: 'hugo', email: 'hugo@teste.com', nome: 'Hugo Reis', telefone: '(21) 95555-4444' };
+const HUGO = {
+  uid: 'hugo',
+  email: 'hugo@teste.com',
+  nome: 'Hugo Reis',
+  cpf: '123.456.789-09',
+  telefone: '(21) 95555-4444',
+};
 
 // Convite pendente recebido pela pessoa logada (ou undefined).
 async function convitePendente(grupoId) {
@@ -1088,6 +1142,14 @@ describe('15. excluir conta', () => {
     // A família continua, sem ela.
     const familia = await semRegras((db) => getDoc(doc(db, 'grupos', grupo.id)));
     expect(familia.data().membros).toEqual([CARLOS.uid]);
+
+    // O CPF dela ficou livre: uma conta nova pode usá-lo.
+    expect(await existe(`cpfs/${ANA.cpf.replace(/\D/g, '')}`)).toBe(false);
+
+    const NOVA = { uid: 'nova-ana', email: 'nova@teste.com', nome: 'Ana Nova', telefone: '(21) 93333-2222' };
+    entrarComo(NOVA);
+    await salvarPerfilUsuario({ ...NOVA, cpf: ANA.cpf });
+    expect((await buscarPerfil(NOVA.uid)).documento).toBe(ANA.cpf);
   });
 
   test('Bruno exclui a conta: histórico e alertas de SOS também saem', async () => {

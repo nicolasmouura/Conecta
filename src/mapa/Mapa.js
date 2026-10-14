@@ -1,3 +1,8 @@
+/*
+ * Mapa da família: um marcador por pessoa, a sua casa e a
+ * centralização no familiar escolhido.
+ */
+
 import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';

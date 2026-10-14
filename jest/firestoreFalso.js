@@ -1,9 +1,12 @@
+/*
+ * Simulação do Cloud Firestore usada nos testes do app (npm test).
+ */
+
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 /*
- * Simulação do Cloud Firestore para os testes (jest.setup.js troca
- * 'firebase/firestore' por este arquivo). Foi o "bancoLocal" do app
- * enquanto os dados ficavam só no aparelho.
+ * O jest.setup.js troca 'firebase/firestore' por este arquivo. Foi o
+ * "bancoLocal" do app enquanto os dados ficavam só no aparelho.
  *
  * Imita só as funções de 'firebase/firestore' que o app usa, com os
  * mesmos nomes e o mesmo comportamento, para o src/dados/* rodar de

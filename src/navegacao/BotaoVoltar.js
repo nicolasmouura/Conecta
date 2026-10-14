@@ -1,3 +1,8 @@
+/*
+ * Botão "← Voltar" das subtelas de Configurações; o voltar do Android
+ * faz o mesmo.
+ */
+
 import { StyleSheet, Text, TouchableOpacity } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 

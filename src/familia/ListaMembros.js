@@ -1,3 +1,8 @@
+/*
+ * Lista dos membros da família (e dos convites pendentes), um
+ * MembroCard por pessoa.
+ */
+
 import { FlatList, StyleSheet } from 'react-native';
 import MembroCard from './MembroCard';
 

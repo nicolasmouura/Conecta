@@ -1,3 +1,7 @@
+/*
+ * Testes do voltar do Android (useVoltarAndroid) e do BotaoVoltar.
+ */
+
 import { BackHandler, Text } from 'react-native';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 

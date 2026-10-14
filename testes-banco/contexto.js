@@ -1,3 +1,8 @@
+/*
+ * Testes do banco: liga o Emulador do Firestore e troca quem está
+ * logado.
+ */
+
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { initializeTestEnvironment } from '@firebase/rules-unit-testing';

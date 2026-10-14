@@ -1,3 +1,8 @@
+/*
+ * Testes do formulário de endereço com a ViaCEP: preenchimento pelo
+ * CEP, erros e respostas atrasadas.
+ */
+
 import { configure, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
 import EditarLugar from '../src/lugares/EditarLugar';

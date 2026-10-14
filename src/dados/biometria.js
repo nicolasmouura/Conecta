@@ -1,3 +1,9 @@
+/*
+ * Regras da biometria: ver se o aparelho tem, pedir a verificação,
+ * classificar o resultado e contar as falhas (na entrada e na senha do
+ * SOS).
+ */
+
 import * as LocalAuthentication from 'expo-local-authentication';
 import * as SecureStore from 'expo-secure-store';
 

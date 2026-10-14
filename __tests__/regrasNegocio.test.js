@@ -1,3 +1,8 @@
+/*
+ * Testes das regras de negócio: cadastro, CPF, endereço, localização,
+ * marcadores do mapa, histórico, convites e foto.
+ */
+
 import * as Location from 'expo-location';
 
 import {
@@ -45,7 +50,6 @@ const CADASTRO = {
   email: 'ana@teste.com',
   cpf: '529.982.247-25',
   telefone: '(21) 98765-4321',
-  endereco: 'Rua A, 1',
   senha: 'senha123',
   confirmacao: 'senha123',
 };
@@ -65,7 +69,6 @@ describe('cadastro', () => {
     [{ telefone: '' }, 'Digite seu telefone.'],
     [{ telefone: '98765-4321' }, 'Digite um telefone válido, com DDD.'],
     [{ telefone: '(21) 98765-43210' }, 'Digite um telefone válido, com DDD.'],
-    [{ endereco: ' ' }, 'Digite seu endereço.'],
     [{ senha: '', confirmacao: '' }, 'Digite uma senha.'],
     [{ senha: '12345', confirmacao: '12345' }, 'A senha precisa ter pelo menos 6 caracteres.'],
     [{ confirmacao: '' }, 'Confirme sua senha.'],
@@ -75,7 +78,7 @@ describe('cadastro', () => {
   });
 
   test('telefone fixo (10 dígitos) também vale', () => {
-    expect(validarDadosEditaveis({ nome: 'Ana', telefone: '(21) 3456-7890', endereco: 'Rua' })).toBeNull();
+    expect(validarDadosEditaveis({ nome: 'Ana', telefone: '(21) 3456-7890' })).toBeNull();
   });
 });
 
@@ -97,14 +100,10 @@ describe('CPF', () => {
     expect(mascararDocumento('AB')).toBe('AB');
   });
 
-  test('editar perfil nunca troca um CPF já cadastrado', () => {
-    const formulario = { nome: 'Ana', telefone: '21987654321', cpf: '111.444.777-35' };
+  test('editar perfil só envia nome e telefone (nunca CPF ou e-mail)', () => {
+    const formulario = { nome: 'Ana', telefone: '21987654321', cpf: '111.444.777-35', email: 'x@y.com' };
 
-    expect(montarAlteracoes({ documento: '529.982.247-25' }, formulario)).toEqual({
-      nome: 'Ana',
-      telefone: '21987654321',
-    });
-    expect(montarAlteracoes({ documento: '' }, formulario).cpf).toBe('111.444.777-35');
+    expect(montarAlteracoes(formulario)).toEqual({ nome: 'Ana', telefone: '21987654321' });
   });
 });
 
@@ -342,5 +341,28 @@ describe('foto de perfil', () => {
   test('recorte quadrado central', () => {
     expect(calcularRecorteQuadrado(400, 300)).toEqual({ originX: 50, originY: 0, width: 300, height: 300 });
     expect(calcularRecorteQuadrado(301, 500)).toEqual({ originX: 0, originY: 99, width: 301, height: 301 });
+  });
+});
+
+describe('"Estou bem"', () => {
+  const { descreverEstouBem, VALIDADE_ESTOU_BEM } = require('../src/dados/estouBem');
+  const AGORA = Date.UTC(2026, 9, 13, 15, 0);
+
+  test('texto do card: agora, minutos e horas', () => {
+    expect(descreverEstouBem(AGORA - 20 * 1000, AGORA)).toBe('Está bem · agora');
+    expect(descreverEstouBem(AGORA - 5 * 60000, AGORA)).toBe('Está bem · há 5 min');
+    expect(descreverEstouBem(AGORA - 3 * 3600000, AGORA)).toBe('Está bem · há 3 h');
+    // Relógio do aparelho um pouco adiantado não vira "há -1 min".
+    expect(descreverEstouBem(AGORA + 30000, AGORA)).toBe('Está bem · agora');
+  });
+
+  test('aceita o Timestamp do Firestore', () => {
+    expect(descreverEstouBem({ toMillis: () => AGORA - 2 * 60000 }, AGORA)).toBe('Está bem · há 2 min');
+  });
+
+  test('sem aviso ou com mais de 24 h: nada aparece', () => {
+    expect(descreverEstouBem(undefined, AGORA)).toBeNull();
+    expect(descreverEstouBem(null, AGORA)).toBeNull();
+    expect(descreverEstouBem(AGORA - VALIDADE_ESTOU_BEM - 1, AGORA)).toBeNull();
   });
 });

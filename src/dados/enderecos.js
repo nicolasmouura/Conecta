@@ -1,3 +1,8 @@
+/*
+ * Endereços: rua atual pelo GPS, CEP pela ViaCEP, endereço digitado →
+ * coordenadas, e validação e formatação dos campos.
+ */
+
 import * as Location from 'expo-location';
 
 import { distanciaEmMetros } from './buscarFamiliares';
