@@ -19,6 +19,7 @@ import {
 } from '../dados/historico';
 import { calcularEstadoCasa, observarLugar } from '../dados/lugares';
 import { criarCacheRua } from '../dados/enderecos';
+import { definirCentroDemo } from '../demo/demonstracao';
 
 // Precisão "Balanced" (Wi-Fi/rede, ~100 m) gasta bem menos bateria que o GPS puro.
 // timeInterval vale no Android; o envio ao Firebase é filtrado em deveEnviarLocalizacao.
@@ -106,6 +107,9 @@ export function useCompartilharLocalizacao(usuario, grupoId) {
 
     async function registrarPosicao({ coords }) {
       if (!ativo) return;
+
+      // Modo demonstração: a família fictícia aparece em volta daqui.
+      definirCentroDemo(coords);
 
       const agora = Date.now();
 

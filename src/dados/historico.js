@@ -21,6 +21,7 @@ import {
   distanciaEmMetros,
   DISTANCIA_MINIMA_ENVIO,
 } from './buscarFamiliares';
+import { ehUidDemo, historicoDemo, MODO_DEMO } from '../demo/demonstracao';
 
 // Máximo de pontos lidos por consulta (os mais recentes do período).
 export const LIMITE_PONTOS_HISTORICO = 500;
@@ -97,7 +98,21 @@ export function calcularPeriodo(chave, agora = new Date()) {
  * filtrar por ela (índice em firestore.indexes.json). O próprio
  * histórico vem completo (sem grupoId).
  */
-export async function buscarHistorico(uid, { inicio, fim }, grupoId = null) {
+export async function buscarHistorico(uid, periodo, grupoId = null) {
+  // Modo demonstração: trajeto fictício dos familiares fictícios e,
+  // se o seu vier vazio, um trajeto até a sua posição.
+  if (MODO_DEMO && ehUidDemo(uid)) return historicoDemo(uid, periodo);
+
+  const resultado = await buscarHistoricoReal(uid, periodo, grupoId);
+
+  if (MODO_DEMO && !grupoId && resultado.pontos.length === 0) {
+    return historicoDemo(uid, periodo);
+  }
+
+  return resultado;
+}
+
+async function buscarHistoricoReal(uid, { inicio, fim }, grupoId = null) {
   const consulta = query(
     collection(db, 'historicoLocalizacoes', uid, 'pontos'),
     ...(grupoId ? [where('grupoId', '==', grupoId)] : []),

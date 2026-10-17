@@ -7,6 +7,7 @@
 import { doc, getDoc, setDoc, writeBatch } from 'firebase/firestore';
 
 import { auth, db } from '../config/firebase';
+import { MODO_DEMO, perfisDemo, separarUidsDemo } from '../demo/demonstracao';
 
 // Limites dos campos editáveis (também conferidos no firestore.rules).
 export const LIMITES_PERFIL = {
@@ -199,6 +200,17 @@ export async function buscarPerfil(uid) {
 // Perfis dos membros da família. Um perfil que não puder
 // ser lido não impede os demais de aparecerem.
 export async function buscarPerfisDosMembros(uids) {
+  // Modo demonstração: perfis fictícios sem ir ao Firebase.
+  if (MODO_DEMO) {
+    const { reais, fakes } = separarUidsDemo(uids);
+
+    return { ...(await buscarPerfisReais(reais)), ...perfisDemo(fakes) };
+  }
+
+  return buscarPerfisReais(uids);
+}
+
+async function buscarPerfisReais(uids) {
   const perfis = await Promise.all(
     uids.map(async (uid) => {
       try {

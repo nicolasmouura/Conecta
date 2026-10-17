@@ -17,6 +17,7 @@ import {
 } from 'firebase/firestore';
 
 import { db } from '../config/firebase';
+import { MODO_DEMO, observarMembrosDemo } from '../demo/demonstracao';
 
 // Lança JA_POSSUI_FAMILIA se o usuário já estiver vinculado a um grupo.
 export async function garantirSemFamilia(uid) {
@@ -95,7 +96,14 @@ export async function buscarGrupoPorId(grupoId) {
 }
 
 
+// Modo demonstração: soma a família fictícia (demo/demonstracao.js).
 export function observarMembros(grupoId, callback, onErro) {
+  return MODO_DEMO
+    ? observarMembrosDemo(observarMembrosReal, grupoId, callback, onErro)
+    : observarMembrosReal(grupoId, callback, onErro);
+}
+
+function observarMembrosReal(grupoId, callback, onErro) {
   return onSnapshot(
     collection(db, 'grupos', grupoId, 'membros'),
     (consulta) => {

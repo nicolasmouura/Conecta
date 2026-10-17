@@ -19,6 +19,7 @@ import {
 import { db } from '../config/firebase';
 import { coordenadaValida } from './buscarFamiliares';
 import { formatarHorario } from './historico';
+import { MODO_DEMO, observarSOSDemo } from '../demo/demonstracao';
 
 // "14:05", ou "26/09 14:05" se não foi hoje.
 export function horarioDoAlerta(criadoEm) {
@@ -140,7 +141,14 @@ export function observarMeuSOS(grupoId, uid, callback, onErro) {
 }
 
 // SOS ativos da família, do mais antigo para o mais recente.
+// Modo demonstração: soma o SOS fictício (demo/demonstracao.js).
 export function observarSOSAtivos(grupoId, callback, onErro) {
+  return MODO_DEMO && grupoId
+    ? observarSOSDemo(observarSOSAtivosReal, grupoId, callback, onErro)
+    : observarSOSAtivosReal(grupoId, callback, onErro);
+}
+
+function observarSOSAtivosReal(grupoId, callback, onErro) {
   if (!grupoId) {
     callback([]);
     return () => {};
