@@ -8,6 +8,7 @@ import * as SMS from 'expo-sms';
 
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../config/firebase';
+import { comTempoLimite, gravarLocal, lerLocal } from './armazenamentoLocal';
 import { coordenadaValida } from './buscarFamiliares';
 import { formatarHorario } from './historico';
 import { buscarPerfisDosMembros } from './salvarUsuario';
@@ -62,23 +63,45 @@ export function montarMensagemSOS({ nome, posicao, posicaoEm, agora = Date.now()
   return linhas.join('\n');
 }
 
-// Telefones da família; sem família ou sem dados, lista vazia.
+/*
+ * Telefones da família; sem família ou sem dados, lista vazia. Cada
+ * busca bem-sucedida fica guardada no aparelho (App.js busca ao abrir),
+ * para o SMS sair com os destinatários mesmo sem internet.
+ */
 export async function buscarTelefonesDaFamilia(grupoId, uidProprio) {
   if (!grupoId) return [];
 
-  try {
-    const membros = await getDocs(collection(db, 'grupos', grupoId, 'membros'));
-    const perfis = await buscarPerfisDosMembros(membros.docs.map((membro) => membro.id));
+  const chave = `telefones:${grupoId}`;
 
-    return telefonesDaFamilia(perfis, uidProprio);
+  try {
+    const membros = await comTempoLimite(
+      getDocs(collection(db, 'grupos', grupoId, 'membros')),
+      3000
+    );
+
+    // Sem internet o Firebase responde com a memória (incompleta).
+    if (membros.metadata.fromCache) throw new Error('SEM_CONEXAO');
+
+    const perfis = await buscarPerfisDosMembros(membros.docs.map((membro) => membro.id));
+    const telefones = telefonesDaFamilia(perfis, uidProprio);
+
+    gravarLocal(chave, telefones);
+
+    return telefones;
   } catch (erro) {
-    console.log('Telefones da família indisponíveis:', erro.code || erro.message);
-    return [];
+    const copia = await lerLocal(chave);
+
+    console.log(
+      copia ? 'Telefones da família pela cópia do aparelho:' : 'Telefones da família indisponíveis:',
+      erro.code || erro.message
+    );
+
+    return copia || [];
   }
 }
 
 // Última posição guardada pelo sistema (não liga o GPS nem espera).
-async function ultimaPosicaoDoAparelho() {
+export async function ultimaPosicaoDoAparelho() {
   try {
     const { granted } = await Location.getForegroundPermissionsAsync();
 

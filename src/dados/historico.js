@@ -4,24 +4,23 @@
  */
 
 import {
-  addDoc,
   collection,
   getDocs,
   limit,
   orderBy,
   query,
-  serverTimestamp,
   Timestamp,
   where,
 } from 'firebase/firestore';
 
-import { db } from '../config/firebase';
+import { auth, db } from '../config/firebase';
 import {
   coordenadaValida,
   distanciaEmMetros,
   DISTANCIA_MINIMA_ENVIO,
 } from './buscarFamiliares';
-import { ehUidDemo, historicoDemo, MODO_DEMO } from '../demo/demonstracao';
+import { comTempoLimite } from './armazenamentoLocal';
+import { enfileirar, lerFila } from './filaEnvio';
 
 // Máximo de pontos lidos por consulta (os mais recentes do período).
 export const LIMITE_PONTOS_HISTORICO = 500;
@@ -36,9 +35,8 @@ export const PERIODOS = [
 ];
 
 /*
- * Chamado só depois que a localização atual foi gravada
- * (herda o intervalo mínimo de 15 s da Etapa 3). O histórico
- * guarda apenas deslocamentos relevantes, não cada envio.
+ * Chamado a cada leitura do GPS, com ou sem internet. O histórico
+ * guarda apenas deslocamentos relevantes, não cada leitura.
  */
 export function deveRegistrarHistorico(ultimoPonto, coordenadas, agora) {
   if (!ultimoPonto) {
@@ -51,25 +49,41 @@ export function deveRegistrarHistorico(ultimoPonto, coordenadas, agora) {
   );
 }
 
-// historicoLocalizacoes/{uid}/pontos/{pontoId} — pontos nunca são alterados.
+/*
+ * historicoLocalizacoes/{uid}/pontos/{pontoId} — pontos nunca são alterados.
+ * Vai pela fila de envio: sem internet, o ponto fica no aparelho (com a
+ * hora em que foi registrado) e sobe quando a conexão voltar.
+ */
 export async function registrarPontoHistorico({ uid, grupoId, coordenadas }) {
   if (!coordenadaValida(coordenadas.latitude, coordenadas.longitude)) {
     throw new Error('COORDENADA_INVALIDA');
   }
 
   const ponto = {
-    uid,
     grupoId,
     latitude: coordenadas.latitude,
     longitude: coordenadas.longitude,
-    registradoEm: serverTimestamp(),
   };
 
   if (typeof coordenadas.accuracy === 'number' && coordenadas.accuracy >= 0) {
     ponto.precisao = Math.round(coordenadas.accuracy);
   }
 
-  await addDoc(collection(db, 'historicoLocalizacoes', uid, 'pontos'), ponto);
+  await enfileirar(uid, 'ponto', ponto);
+}
+
+// Pontos do próprio usuário que ainda estão só no aparelho.
+async function pontosNaFila(uid, inicio, fim) {
+  return (await lerFila(uid))
+    .filter((item) => item.tipo === 'ponto')
+    .map((item) => ({
+      id: item.id,
+      latitude: item.dados.latitude,
+      longitude: item.dados.longitude,
+      precisao: item.dados.precisao,
+      registradoEm: item.criadoEm,
+    }))
+    .filter((ponto) => ponto.registradoEm >= inicio.getTime() && ponto.registradoEm < fim.getTime());
 }
 
 // Intervalo [inicio, fim) no fuso horário do aparelho.
@@ -98,21 +112,7 @@ export function calcularPeriodo(chave, agora = new Date()) {
  * filtrar por ela (índice em firestore.indexes.json). O próprio
  * histórico vem completo (sem grupoId).
  */
-export async function buscarHistorico(uid, periodo, grupoId = null) {
-  // Modo demonstração: trajeto fictício dos familiares fictícios e,
-  // se o seu vier vazio, um trajeto até a sua posição.
-  if (MODO_DEMO && ehUidDemo(uid)) return historicoDemo(uid, periodo);
-
-  const resultado = await buscarHistoricoReal(uid, periodo, grupoId);
-
-  if (MODO_DEMO && !grupoId && resultado.pontos.length === 0) {
-    return historicoDemo(uid, periodo);
-  }
-
-  return resultado;
-}
-
-async function buscarHistoricoReal(uid, { inicio, fim }, grupoId = null) {
+export async function buscarHistorico(uid, { inicio, fim }, grupoId = null) {
   const consulta = query(
     collection(db, 'historicoLocalizacoes', uid, 'pontos'),
     ...(grupoId ? [where('grupoId', '==', grupoId)] : []),
@@ -122,7 +122,21 @@ async function buscarHistoricoReal(uid, { inicio, fim }, grupoId = null) {
     limit(LIMITE_PONTOS_HISTORICO)
   );
 
-  const resultado = await getDocs(consulta);
+  const proprio = auth.currentUser?.uid === uid;
+  const pendentes = proprio ? await pontosNaFila(uid, inicio, fim) : [];
+
+  let resultado;
+
+  try {
+    resultado = await comTempoLimite(getDocs(consulta));
+  } catch (erro) {
+    // Sem internet: o próprio histórico mostra ao menos o que está no aparelho.
+    if (pendentes.length === 0) throw erro;
+
+    console.log('Histórico sem conexão, só os pontos do aparelho:', erro.code || erro.message);
+
+    return { pontos: pendentes, limitado: false };
+  }
 
   const pontos = resultado.docs
     .map((documento) => {
@@ -143,8 +157,14 @@ async function buscarHistoricoReal(uid, { inicio, fim }, grupoId = null) {
     )
     .reverse();
 
+  // Soma os pontos que ainda não subiram (sem repetir os que o
+  // Firebase já tem em memória).
+  const ids = new Set(pontos.map((ponto) => ponto.id));
+  const todos = [...pontos, ...pendentes.filter((ponto) => !ids.has(ponto.id))]
+    .sort((a, b) => a.registradoEm - b.registradoEm);
+
   return {
-    pontos,
+    pontos: todos,
     limitado: resultado.size === LIMITE_PONTOS_HISTORICO,
   };
 }

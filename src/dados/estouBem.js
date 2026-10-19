@@ -4,19 +4,19 @@
  * por 24 h ("Está bem · há 5 min").
  */
 
-import { doc, serverTimestamp, updateDoc } from 'firebase/firestore';
-
-import { db } from '../config/firebase';
+import { enfileirar } from './filaEnvio';
 
 // Depois disso o aviso some do card (já não diz nada sobre agora).
 export const VALIDADE_ESTOU_BEM = 24 * 60 * 60 * 1000;
 
-// Só o próprio registro, só esse campo e com a hora do servidor
-// (firestore.rules). Sem internet, o Firebase envia quando voltar.
-export function avisarQueEstouBem(grupoId, uid) {
-  return updateDoc(doc(db, 'grupos', grupoId, 'membros', uid), {
-    estouBemEm: serverTimestamp(),
-  });
+/*
+ * Só o próprio registro, só esse campo e com a hora do servidor
+ * (firestore.rules). Vai pela fila do aparelho: sem internet, sai
+ * quando a conexão voltar (até 1 h depois; mais que isso é descartado).
+ * Termina ao guardar, sem esperar o servidor.
+ */
+export async function avisarQueEstouBem(grupoId, uid) {
+  await enfileirar(uid, 'estouBem', { grupoId });
 }
 
 function paraMilissegundos(valor) {

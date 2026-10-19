@@ -171,7 +171,7 @@ export default function AutenticacaoScreen({ onAutenticado, aviso }) {
       } else if (e.code === 'auth/too-many-requests') {
         setErro('Muitas tentativas. Aguarde alguns minutos e tente novamente.');
       } else if (e.code === 'auth/network-request-failed') {
-        setErro('Sem conexão. Verifique sua internet e tente novamente.');
+        setErro('Para entrar na conta é preciso internet. Depois de entrar, o Conecta funciona sem conexão.');
       } else {
         setErro('Não foi possível continuar. Tente novamente.');
       }
@@ -376,6 +376,9 @@ export default function AutenticacaoScreen({ onAutenticado, aviso }) {
           value={senha}
           onChangeText={setSenha}
           secureTextEntry
+          // O teclado não pode mudar a senha (maiúscula/correção automática).
+          autoCapitalize="none"
+          autoCorrect={false}
         />
 
         {cadastro && (
@@ -391,6 +394,8 @@ export default function AutenticacaoScreen({ onAutenticado, aviso }) {
               value={confirmacao}
               onChangeText={setConfirmacao}
               secureTextEntry
+              autoCapitalize="none"
+              autoCorrect={false}
             />
           </>
         )}

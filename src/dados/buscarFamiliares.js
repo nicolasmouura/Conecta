@@ -14,7 +14,7 @@ import {
   where,
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
-import { MODO_DEMO, observarFamiliaresDemo } from '../demo/demonstracao';
+import { observarComCopiaLocal } from './armazenamentoLocal';
 
 // Política de envio: economiza bateria, internet e gravações.
 export const INTERVALO_MINIMO_ENVIO = 15 * 1000; // nunca mais que 1 gravação a cada 15 s
@@ -25,14 +25,7 @@ export const DISTANCIA_MINIMA_ENVIO = 50; // em movimento: a cada 50 m
 // 10 min (com o app em uso, a Etapa 3 grava pelo menos a cada 5 min).
 export const LIMITE_LOCALIZACAO_ATUAL = 10 * 60 * 1000;
 
-// Modo demonstração: soma a família fictícia (demo/demonstracao.js).
 export function observarFamiliares(grupoId, callback, onErro) {
-  return MODO_DEMO && grupoId
-    ? observarFamiliaresDemo(observarFamiliaresReal, grupoId, callback, onErro)
-    : observarFamiliaresReal(grupoId, callback, onErro);
-}
-
-function observarFamiliaresReal(grupoId, callback, onErro) {
   // Sem grupo ainda -> lista vazia (evita mostrar dados de outros grupos)
   if (!grupoId) {
     callback([]);
@@ -44,21 +37,27 @@ function observarFamiliaresReal(grupoId, callback, onErro) {
     where('grupoId', '==', grupoId)
   );
 
-  const cancelar = onSnapshot(
-    referencia,
-    (consulta) => {
-      const familiares = consulta.docs.map((documento) => ({
-        id: documento.id,
-        // Gravação local ainda sem hora do servidor: usa a estimativa.
-        ...documento.data({ serverTimestamps: 'estimate' }),
-      }));
+  // Sem internet: a última posição conhecida de cada um (cópia local),
+  // com o "Atualizado há ..." de quando foi gravada.
+  return observarComCopiaLocal(
+    `familiares:${grupoId}`,
+    (aoReceber, falhou) =>
+      onSnapshot(
+        referencia,
+        (consulta) => {
+          const familiares = consulta.docs.map((documento) => ({
+            id: documento.id,
+            // Gravação local ainda sem hora do servidor: usa a estimativa.
+            ...documento.data({ serverTimestamps: 'estimate' }),
+          }));
 
-      callback(familiares);
-    },
+          aoReceber(familiares, !consulta.metadata.fromCache);
+        },
+        falhou
+      ),
+    callback,
     onErro
   );
-
-  return cancelar;
 }
 
 export function coordenadaValida(latitude, longitude) {

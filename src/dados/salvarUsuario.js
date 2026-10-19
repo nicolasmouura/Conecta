@@ -7,7 +7,7 @@
 import { doc, getDoc, setDoc, writeBatch } from 'firebase/firestore';
 
 import { auth, db } from '../config/firebase';
-import { MODO_DEMO, perfisDemo, separarUidsDemo } from '../demo/demonstracao';
+import { comTempoLimite, gravarLocal, lerLocal } from './armazenamentoLocal';
 
 // Limites dos campos editáveis (também conferidos no firestore.rules).
 export const LIMITES_PERFIL = {
@@ -186,48 +186,71 @@ function normalizarPerfil(uid, dados = {}) {
 }
 
 // O próprio perfil vem com o CPF (área privada); o de outra pessoa, sem.
+// Sem internet, o próprio perfil vem da cópia do aparelho (sem o CPF).
 export async function buscarPerfil(uid) {
+  const proprio = auth.currentUser?.uid === uid;
+
+  try {
+    return await comTempoLimite(buscarPerfilNoFirebase(uid, proprio));
+  } catch (erro) {
+    const copia = proprio ? await lerLocal('perfil') : null;
+
+    if (copia?.uid === uid) {
+      console.log('Perfil sem conexão, usando a cópia do aparelho.');
+      return copia;
+    }
+
+    throw erro;
+  }
+}
+
+async function buscarPerfilNoFirebase(uid, proprio) {
   const resultado = await getDoc(doc(db, 'usuarios', uid));
   const dados = resultado.exists() ? resultado.data() : {};
 
-  if (auth.currentUser?.uid === uid) {
-    return normalizarPerfil(uid, { ...dados, documento: await buscarDocumento(uid) });
+  if (proprio) {
+    const perfil = normalizarPerfil(uid, { ...dados, documento: await buscarDocumento(uid) });
+
+    // O CPF não fica no aparelho.
+    gravarLocal('perfil', { ...perfil, documento: '' });
+
+    return perfil;
   }
 
   return normalizarPerfil(uid, dados);
 }
 
-// Perfis dos membros da família. Um perfil que não puder
-// ser lido não impede os demais de aparecerem.
+/*
+ * Perfis dos membros da família. Um perfil que não puder ser lido
+ * não impede os demais de aparecerem; sem internet, vem a cópia do
+ * aparelho (nome, telefone e foto).
+ */
 export async function buscarPerfisDosMembros(uids) {
-  // Modo demonstração: perfis fictícios sem ir ao Firebase.
-  if (MODO_DEMO) {
-    const { reais, fakes } = separarUidsDemo(uids);
+  const copia = (await lerLocal('perfis')) || {};
 
-    return { ...(await buscarPerfisReais(reais)), ...perfisDemo(fakes) };
-  }
-
-  return buscarPerfisReais(uids);
-}
-
-async function buscarPerfisReais(uids) {
   const perfis = await Promise.all(
     uids.map(async (uid) => {
       try {
-        const resultado = await getDoc(doc(db, 'usuarios', uid));
+        const resultado = await comTempoLimite(getDoc(doc(db, 'usuarios', uid)));
 
         // O CPF fica na área privada: nunca vem para a família.
         return resultado.exists() ? normalizarPerfil(uid, resultado.data()) : null;
       } catch (erro) {
-        console.error('Erro ao buscar perfil do membro:', uid, erro);
+        if (copia[uid]) return copia[uid];
+
+        console.log('Perfil do membro indisponível:', uid, erro.code || erro.message);
         return null;
       }
     })
   );
 
-  return Object.fromEntries(
+  const resultado = Object.fromEntries(
     uids.map((uid, indice) => [uid, perfis[indice]])
   );
+
+  gravarLocal('perfis', { ...copia, ...resultado });
+
+  return resultado;
 }
 
 function formatarTelefone(telefone) {

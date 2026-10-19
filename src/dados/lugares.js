@@ -13,6 +13,7 @@ import {
 } from 'firebase/firestore';
 
 import { db } from '../config/firebase';
+import { observarComCopiaLocal } from './armazenamentoLocal';
 import { coordenadaValida, distanciaEmMetros } from './buscarFamiliares';
 import { formatarEndereco, limparEndereco, validarEndereco } from './enderecos';
 
@@ -50,11 +51,22 @@ export async function buscarLugares(uid) {
   );
 }
 
-// Um lugar do próprio usuário em tempo real (1 documento).
+// Um lugar do próprio usuário em tempo real (1 documento). Sem
+// internet vem a cópia do aparelho: o "em casa" continua funcionando.
 export function observarLugar(uid, lugarId, callback, onErro) {
-  return onSnapshot(
-    referenciaLugar(uid, lugarId),
-    (documento) => callback(documento.exists() ? { id: documento.id, ...documento.data() } : null),
+  return observarComCopiaLocal(
+    `lugar:${uid}:${lugarId}`,
+    (aoReceber, falhou) =>
+      onSnapshot(
+        referenciaLugar(uid, lugarId),
+        (documento) =>
+          aoReceber(
+            documento.exists() ? { id: documento.id, ...documento.data() } : null,
+            !documento.metadata.fromCache
+          ),
+        falhou
+      ),
+    callback,
     onErro
   );
 }

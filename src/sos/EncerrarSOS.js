@@ -65,14 +65,19 @@ export default function EncerrarSOS({ usuario, grupoId, onSair }) {
   }
 
   async function encerrar() {
-    await encerrarSOS(alerta.id);
+    const { enviado } = await encerrarSOS(alerta.id, usuario.uid);
     await zerarFalhasSenhaSOS(usuario.uid).catch(() => {});
 
     // Limpa o formulário para um próximo SOS.
     setPedirSenha(false);
     setSenha('');
     setMensagem('');
-    Alert.alert('SOS encerrado', 'O alerta deixou de aparecer para sua família.');
+    Alert.alert(
+      'SOS encerrado',
+      enviado
+        ? 'O alerta deixou de aparecer para sua família.'
+        : 'Sem internet: o alerta deixa de aparecer para sua família assim que a conexão voltar.'
+    );
   }
 
   async function confirmarComBiometria() {

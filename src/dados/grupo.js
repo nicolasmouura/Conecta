@@ -17,7 +17,12 @@ import {
 } from 'firebase/firestore';
 
 import { db } from '../config/firebase';
-import { MODO_DEMO, observarMembrosDemo } from '../demo/demonstracao';
+import {
+  comTempoLimite,
+  gravarLocal,
+  lerLocal,
+  observarComCopiaLocal,
+} from './armazenamentoLocal';
 
 // Lança JA_POSSUI_FAMILIA se o usuário já estiver vinculado a um grupo.
 export async function garantirSemFamilia(uid) {
@@ -83,38 +88,56 @@ export async function buscarGrupoPorId(grupoId) {
   }
 
   const referencia = doc(db, 'grupos', grupoId);
-  const resultado = await getDoc(referencia);
+  const chave = `grupo:${grupoId}`;
+
+  let resultado;
+
+  try {
+    resultado = await comTempoLimite(getDoc(referencia));
+  } catch (erro) {
+    // Sem internet: a última cópia guardada no aparelho.
+    const copia = await lerLocal(chave);
+
+    if (copia) return copia;
+
+    throw erro;
+  }
 
   if (!resultado.exists()) {
     return null;
   }
 
-  return {
+  const grupo = {
     id: resultado.id,
     ...resultado.data(),
   };
+
+  gravarLocal(chave, grupo);
+
+  return grupo;
 }
 
 
-// Modo demonstração: soma a família fictícia (demo/demonstracao.js).
+// Sem internet: a última lista de membros guardada no aparelho.
 export function observarMembros(grupoId, callback, onErro) {
-  return MODO_DEMO
-    ? observarMembrosDemo(observarMembrosReal, grupoId, callback, onErro)
-    : observarMembrosReal(grupoId, callback, onErro);
-}
-
-function observarMembrosReal(grupoId, callback, onErro) {
-  return onSnapshot(
-    collection(db, 'grupos', grupoId, 'membros'),
-    (consulta) => {
-      callback(
-        consulta.docs.map((documento) => ({
-          id: documento.id,
-          // "Estou bem" recém-tocado ainda sem hora do servidor: usa a estimativa.
-          ...documento.data({ serverTimestamps: 'estimate' }),
-        }))
-      );
-    },
+  return observarComCopiaLocal(
+    `membros:${grupoId}`,
+    (aoReceber, falhou) =>
+      onSnapshot(
+        collection(db, 'grupos', grupoId, 'membros'),
+        (consulta) => {
+          aoReceber(
+            consulta.docs.map((documento) => ({
+              id: documento.id,
+              // "Estou bem" recém-tocado ainda sem hora do servidor: usa a estimativa.
+              ...documento.data({ serverTimestamps: 'estimate' }),
+            })),
+            !consulta.metadata.fromCache
+          );
+        },
+        falhou
+      ),
+    callback,
     onErro
   );
 }

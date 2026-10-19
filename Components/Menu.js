@@ -20,6 +20,7 @@ import { Feather } from '@expo/vector-icons';
 import MapView, { Marker } from 'react-native-maps';
 
 import { avisarQueEstouBem } from '../src/dados/estouBem';
+import AvisoOffline from '../src/navegacao/AvisoOffline';
 import { formatarHorario } from '../src/dados/historico';
 import { descreverLocalizacao } from '../src/mapa/compartilharLocalizacao';
 import AvisoSOS from '../src/sos/AvisoSOS';
@@ -107,7 +108,7 @@ export default function Menu({
     setAvisadoEm(momento);
     setAguardando(true);
 
-    // Sem internet, o Firebase guarda e envia quando a conexão voltar.
+    // Sem internet, fica guardado no aparelho e sai quando a conexão voltar.
     avisarQueEstouBem(grupoId, uidAtual).catch((erro) => {
       console.log('"Estou bem" não enviado:', erro.code || erro.message);
       setAvisadoEm(null);
@@ -141,6 +142,8 @@ export default function Menu({
         contentContainerStyle={styles.conteudo}
         showsVerticalScrollIndicator={false}
       >
+        <AvisoOffline faixa />
+
         <View style={styles.cabecalho}>
           <View>
             <Text style={styles.saudar}>

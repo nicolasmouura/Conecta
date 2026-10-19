@@ -186,7 +186,14 @@ export default function SOSScreen({ usuario, grupoId, posicaoAtual, posicaoEm })
         nome: usuario.nome,
       });
 
-      if (!resultado.jaExistia) {
+      if (!resultado.jaExistia && !resultado.enviado) {
+        // Sem internet: o alerta está guardado e sai quando a conexão voltar.
+        Alert.alert(
+          'Sem internet',
+          'Seu SOS foi guardado e será enviado à sua família assim que a conexão voltar. Avise também por SMS, que funciona sem internet.',
+          [{ text: 'OK' }, opcaoSMS]
+        );
+      } else if (!resultado.jaExistia) {
         Alert.alert(
           'SOS acionado',
           resultado.comLocalizacao

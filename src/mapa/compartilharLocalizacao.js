@@ -19,7 +19,7 @@ import {
 } from '../dados/historico';
 import { calcularEstadoCasa, observarLugar } from '../dados/lugares';
 import { criarCacheRua } from '../dados/enderecos';
-import { definirCentroDemo } from '../demo/demonstracao';
+import { comTempoLimite, semConexao } from '../dados/armazenamentoLocal';
 
 // Precisão "Balanced" (Wi-Fi/rede, ~100 m) gasta bem menos bateria que o GPS puro.
 // timeInterval vale no Android; o envio ao Firebase é filtrado em deveEnviarLocalizacao.
@@ -108,9 +108,6 @@ export function useCompartilharLocalizacao(usuario, grupoId) {
     async function registrarPosicao({ coords }) {
       if (!ativo) return;
 
-      // Modo demonstração: a família fictícia aparece em volta daqui.
-      definirCentroDemo(coords);
-
       const agora = Date.now();
 
       if (
@@ -127,11 +124,24 @@ export function useCompartilharLocalizacao(usuario, grupoId) {
         }));
       }
 
+      // Histórico: aproveita o mesmo GPS (sem outro watcher). Vai pela
+      // fila do aparelho, então funciona sem internet; uma falha aqui
+      // nunca afeta a localização atual.
+      if (deveRegistrarHistorico(ultimoPontoHistorico, coords, agora)) {
+        ultimoPontoHistorico = { latitude: coords.latitude, longitude: coords.longitude, em: agora };
+
+        registrarPontoHistorico({ uid, grupoId, coordenadas: coords }).catch((erroHistorico) =>
+          console.error('Erro ao registrar histórico:', erroHistorico)
+        );
+      }
+
       if (enviando || !deveEnviarLocalizacao(ultimoEnvio, coords, agora)) {
         return;
       }
 
       enviando = true;
+
+      let envio = null;
 
       try {
         const estadoCasa = calcularEstadoCasa({
@@ -143,7 +153,7 @@ export function useCompartilharLocalizacao(usuario, grupoId) {
 
         const rua = await ruaAtual(coords, agora);
 
-        await salvarLocalizacao({
+        envio = salvarLocalizacao({
           uid,
           grupoId,
           nome: nomeRef.current,
@@ -151,6 +161,8 @@ export function useCompartilharLocalizacao(usuario, grupoId) {
           rua,
           estadoCasa,
         });
+
+        await comTempoLimite(envio);
 
         estavaEmCasa = estadoCasa?.emCasa ?? false;
 
@@ -165,26 +177,26 @@ export function useCompartilharLocalizacao(usuario, grupoId) {
             erroEnvio: false,
           }));
         }
-
-        // Histórico: aproveita o mesmo envio (sem outro watcher/GPS).
-        // Uma falha aqui nunca afeta a localização atual.
-        if (deveRegistrarHistorico(ultimoPontoHistorico, coords, agora)) {
-          try {
-            await registrarPontoHistorico({ uid, grupoId, coordenadas: coords });
-
-            ultimoPontoHistorico = { latitude: coords.latitude, longitude: coords.longitude, em: agora };
-          } catch (erroHistorico) {
-            console.error('Erro ao registrar histórico:', erroHistorico);
-          }
-        }
       } catch (erro) {
-        console.error('Erro ao enviar localização:', erro);
+        if (semConexao(erro)) {
+          console.log('Sem conexão: a localização sobe quando a internet voltar.');
+        } else {
+          console.error('Erro ao enviar localização:', erro);
+        }
 
         if (ativo) {
           setEstado((atual) => ({ ...atual, erroEnvio: true }));
         }
       } finally {
-        enviando = false;
+        // Sem internet o Firebase segura o envio até a conexão voltar:
+        // nenhum outro é empilhado antes de ele terminar.
+        if (envio) {
+          envio.catch(() => {}).finally(() => {
+            enviando = false;
+          });
+        } else {
+          enviando = false;
+        }
       }
     }
 

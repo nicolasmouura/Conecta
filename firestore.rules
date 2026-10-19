@@ -210,7 +210,9 @@ service cloud.firestore {
     // Ponto de histórico (historicoLocalizacoes/{uid}/pontos/{id}).
     // Mesmas garantias da localização atual: o ponto é do usuário
     // autenticado, da família do perfil, com coordenadas válidas
-    // e horário do servidor.
+    // e horário em que foi registrado no aparelho: sem internet o
+    // ponto espera na fila e sobe depois, então vale até 8 dias atrás
+    // (o app descarta com 7) e até 10 min à frente (relógio adiantado).
     function pontoHistoricoValido(userId) {
       let dados = request.resource.data;
       let perfil = get(caminhoUsuario(meuUid())).data;
@@ -224,7 +226,9 @@ service cloud.firestore {
         && dados.latitude is number && dados.latitude >= -90 && dados.latitude <= 90
         && dados.longitude is number && dados.longitude >= -180 && dados.longitude <= 180
         && (!('precisao' in dados) || (dados.precisao is number && dados.precisao >= 0))
-        && dados.registradoEm == request.time;
+        && dados.registradoEm is timestamp
+        && dados.registradoEm <= request.time + duration.value(10, 'm')
+        && dados.registradoEm > request.time - duration.value(8, 'd');
     }
 
     // Novo alerta SOS: do próprio usuário, na família do perfil,

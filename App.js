@@ -53,10 +53,19 @@ import {
 } from './src/dados/biometria';
 import { garantirEntradaDiretorio } from './src/dados/salvarUsuario';
 import { apagarSenhaOffline } from './src/dados/senhaOffline';
+import {
+  apagarDadosLocais,
+  comTempoLimite,
+  gravarLocal,
+  lerLocal,
+} from './src/dados/armazenamentoLocal';
+import { processarFila } from './src/dados/filaEnvio';
+import { buscarTelefonesDaFamilia } from './src/dados/smsSOS';
 import GrupoScreen from './src/grupo/GrupoScreen';
 import { useCompartilharLocalizacao } from './src/mapa/compartilharLocalizacao';
 import { useVoltarAndroid } from './src/navegacao/voltar';
 import BotaoMenu from './src/navegacao/BotaoMenu';
+import AvisoOffline from './src/navegacao/AvisoOffline';
 
 import { cores } from './src/theme/theme';
 
@@ -124,8 +133,8 @@ export default function App() {
           usuario.uid
         );
 
-        const resultado = await getDoc(
-          referencia
+        const resultado = await comTempoLimite(
+          getDoc(referencia)
         );
 
         if (resultado.exists()) {
@@ -136,6 +145,19 @@ export default function App() {
             nome: dadosUsuario.nome,
             email: dadosUsuario.email,
           });
+
+          // Cópia para abrir o app sem internet (nome e família).
+          gravarLocal('sessao', {
+            uid: usuario.uid,
+            nome: dadosUsuario.nome,
+            email: dadosUsuario.email,
+            grupoId: dadosUsuario.grupoId || null,
+          });
+
+          // Telefones da família guardados para o SOS por SMS offline.
+          if (dadosUsuario.grupoId) {
+            buscarTelefonesDaFamilia(dadosUsuario.grupoId, usuario.uid);
+          }
 
           // Entrada no índice de convites: criada aqui, depois que o
           // e-mail foi confirmado (no cadastro ainda não estava).
@@ -178,6 +200,25 @@ export default function App() {
           return;
         }
       } catch (e) {
+        // Sem internet: entra com a última cópia (nome e família).
+        const copia = await lerLocal('sessao');
+
+        if (copia?.uid === usuario.uid) {
+          console.log('Sem conexão: usando os dados guardados no aparelho.');
+
+          setPerfil((perfilAtual) =>
+            perfilAtual || {
+              uid: copia.uid,
+              nome: copia.nome,
+              email: copia.email,
+            }
+          );
+
+          setGrupoId(copia.grupoId);
+          setTemGrupo(Boolean(copia.grupoId));
+          return;
+        }
+
         console.error(
           'Erro ao verificar grupo:',
           e
@@ -202,6 +243,14 @@ export default function App() {
 
     verificarGrupo();
   }, [usuario, emailOk]);
+
+  // Reenvia o que ficou na fila do aparelho (SOS, "Estou bem",
+  // histórico) quando o app abriu sem ter mandado tudo.
+  useEffect(() => {
+    if (usuario?.uid && emailOk) {
+      processarFila(usuario.uid);
+    }
+  }, [usuario?.uid, emailOk]);
 
   // Só a PRIMEIRA emissão (sessão restaurada ao abrir) é tratada aqui:
   // com a biometria ligada, a sessão fica travada até ela ser confirmada;
@@ -348,6 +397,10 @@ export default function App() {
 
     apagarSenhaOffline().catch((erro) =>
       console.log('Hash da senha não apagado:', erro.message)
+    );
+
+    apagarDadosLocais().catch((erro) =>
+      console.log('Cópias locais não apagadas:', erro.message)
     );
 
     setUsuario(null);
@@ -616,6 +669,9 @@ export default function App() {
         {tela !== 'menu' && !telaCheia && (
           <BotaoMenu onPress={voltarMenu} />
         )}
+
+        {/* No Menu o aviso é uma faixa dentro da tela (Menu.js). */}
+        {tela !== 'menu' && !telaCheia && <AvisoOffline />}
 
         <StatusBar style="auto" />
       </View>
