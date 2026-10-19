@@ -1,6 +1,6 @@
 /*
- * Cards dos familiares abaixo do mapa (foto, online, rua, casa,
- * "Estou bem" e distância); tocar num card centraliza o mapa nele.
+ * Cards dos familiares abaixo do mapa (foto, online, bateria, rua,
+ * casa, "Estou bem" e distância); tocar num card centraliza o mapa nele.
  */
 
 import { FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -36,6 +36,22 @@ function CardFamiliar({ card, selecionado, onPress }) {
             {card.temLocalizacao ? `${card.online ? 'Online' : 'Offline'} · ${card.visto}` : card.visto}
           </Text>
         </View>
+
+        {card.bateria && (
+          <View style={styles.linha}>
+            <Feather
+              name={card.bateria.icone}
+              size={12}
+              color={card.bateria.baixa ? cores.erro : cores.textoSecundario}
+            />
+            <Text
+              style={[styles.detalhe, card.bateria.baixa && styles.bateriaBaixa]}
+              numberOfLines={1}
+            >
+              {card.bateria.texto}
+            </Text>
+          </View>
+        )}
 
         {card.rua && (
           <View style={styles.linha}>
@@ -164,6 +180,11 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 13,
     color: cores.texto,
+  },
+
+  bateriaBaixa: {
+    color: cores.erro,
+    fontFamily: fontes.destaque,
   },
 
   distancia: {

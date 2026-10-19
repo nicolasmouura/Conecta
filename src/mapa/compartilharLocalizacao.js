@@ -1,6 +1,7 @@
 /*
  * Hook que compartilha a localização enquanto o app está aberto:
- * permissão, GPS, envio para a família (com rua e situação da casa) e
+ * permissão, GPS, envio para a família (com rua, situação da casa e
+ * bateria) e
  * pontos do histórico.
  */
 
@@ -20,6 +21,7 @@ import {
 import { calcularEstadoCasa, observarLugar } from '../dados/lugares';
 import { criarCacheRua } from '../dados/enderecos';
 import { comTempoLimite, semConexao } from '../dados/armazenamentoLocal';
+import { lerBateria } from '../dados/bateria';
 
 // Precisão "Balanced" (Wi-Fi/rede, ~100 m) gasta bem menos bateria que o GPS puro.
 // timeInterval vale no Android; o envio ao Firebase é filtrado em deveEnviarLocalizacao.
@@ -151,7 +153,7 @@ export function useCompartilharLocalizacao(usuario, grupoId) {
           estavaEmCasa,
         });
 
-        const rua = await ruaAtual(coords, agora);
+        const [rua, energia] = await Promise.all([ruaAtual(coords, agora), lerBateria()]);
 
         envio = salvarLocalizacao({
           uid,
@@ -160,6 +162,7 @@ export function useCompartilharLocalizacao(usuario, grupoId) {
           coordenadas: coords,
           rua,
           estadoCasa,
+          energia,
         });
 
         await comTempoLimite(envio);

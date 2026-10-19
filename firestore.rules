@@ -137,7 +137,7 @@ service cloud.firestore {
       return autenticado()
         && meuUid() == userId
         && dados.keys().hasAll(['uid', 'grupoId', 'nome', 'latitude', 'longitude', 'atualizadoEm'])
-        && dados.keys().hasOnly(['uid', 'grupoId', 'nome', 'latitude', 'longitude', 'precisao', 'atualizadoEm', 'online', 'rua', 'emCasa', 'distanciaCasa'])
+        && dados.keys().hasOnly(['uid', 'grupoId', 'nome', 'latitude', 'longitude', 'precisao', 'atualizadoEm', 'online', 'rua', 'emCasa', 'distanciaCasa', 'bateria', 'carregando'])
         && dados.uid == meuUid()
         && dados.grupoId == perfil.get('grupoId', null)
         && ehMembro(dados.grupoId)
@@ -147,6 +147,9 @@ service cloud.firestore {
         && (!('precisao' in dados) || (dados.precisao is number && dados.precisao >= 0))
         && dados.atualizadoEm == request.time
         && (!('online' in dados) || dados.online is bool)
+        // Bateria do aparelho (opcional): porcentagem inteira e se está na tomada.
+        && (!('bateria' in dados) || (dados.bateria is int && dados.bateria >= 0 && dados.bateria <= 100))
+        && (!('carregando' in dados) || dados.carregando is bool)
         && derivadosDaCasaValidos(dados);
     }
 

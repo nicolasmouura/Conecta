@@ -1,8 +1,9 @@
 /*
  * Textos dos cards da família no mapa: online ou offline, distância
- * até você e situação em relação à casa.
+ * até você, situação em relação à casa e bateria.
  */
 
+import { descreverBateria } from './bateria';
 import { distanciaEmMetros } from './buscarFamiliares';
 import { descreverEstouBem } from './estouBem';
 import { calcularEstadoCasa } from './lugares';
@@ -106,6 +107,7 @@ export function montarCardsFamiliares({ marcadores, semLocalizacao, perfis, memb
       rua: marcador.rua || null,
       casa: marcador.voce ? minhaLinhaCasa(marcador, minhaCasa) : descreverCasa(marcador),
       estouBem: estouBemDe(marcador.uid),
+      bateria: descreverBateria(marcador),
     };
   });
 
@@ -121,6 +123,7 @@ export function montarCardsFamiliares({ marcadores, semLocalizacao, perfis, memb
     rua: null,
     casa: pessoa.voce && minhaCasa === null ? 'Casa não cadastrada' : null,
     estouBem: estouBemDe(pessoa.uid),
+    bateria: null,
   }));
 
   // Você primeiro; depois quem está online; depois os demais.

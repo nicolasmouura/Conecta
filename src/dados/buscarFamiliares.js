@@ -193,6 +193,8 @@ export function montarMarcadores({
       rua: localizacao?.rua ?? null,
       emCasa: localizacao?.emCasa ?? null,
       distanciaCasa: localizacao?.distanciaCasa ?? null,
+      bateria: localizacao?.bateria ?? null,
+      carregando: localizacao?.carregando ?? false,
     });
   }
 
@@ -243,8 +245,9 @@ export function deveEnviarLocalizacao(ultimoEnvio, coordenadas, agora) {
 /*
  * rua / estadoCasa (opcionais): derivados calculados neste aparelho
  * (enderecos.js / lugares.js). A casa em si nunca é enviada.
+ * energia (opcional): { bateria, carregando } de bateria.js.
  */
-export async function salvarLocalizacao({ uid, grupoId, nome, coordenadas, rua, estadoCasa }) {
+export async function salvarLocalizacao({ uid, grupoId, nome, coordenadas, rua, estadoCasa, energia }) {
   const localizacao = {
     uid,
     grupoId,
@@ -266,6 +269,11 @@ export async function salvarLocalizacao({ uid, grupoId, nome, coordenadas, rua, 
   if (estadoCasa) {
     localizacao.emCasa = estadoCasa.emCasa;
     localizacao.distanciaCasa = estadoCasa.distanciaCasa;
+  }
+
+  if (energia) {
+    localizacao.bateria = energia.bateria;
+    localizacao.carregando = energia.carregando;
   }
 
   await setDoc(doc(db, 'familiares', uid), localizacao);
