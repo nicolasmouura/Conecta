@@ -181,3 +181,28 @@ export function formatarHorario(momento, comData) {
 
   return `${doisDigitos(data.getDate())}/${doisDigitos(data.getMonth() + 1)} ${hora}`;
 }
+
+/*
+ * Região em que o mapa do histórico abre: a rota inteira com uma folga
+ * em volta, mas nunca mais perto que um bairro (~650 m na tela), para
+ * um ponto só ou alguém parado no mesmo lugar. null sem pontos.
+ */
+export const DELTA_MINIMO_ROTA = 0.006;
+const FOLGA_ROTA = 1.4;
+
+export function regiaoDaRota(coordenadas) {
+  if (!coordenadas.length) return null;
+
+  const latitudes = coordenadas.map((ponto) => ponto.latitude);
+  const longitudes = coordenadas.map((ponto) => ponto.longitude);
+
+  const [minLat, maxLat] = [Math.min(...latitudes), Math.max(...latitudes)];
+  const [minLon, maxLon] = [Math.min(...longitudes), Math.max(...longitudes)];
+
+  return {
+    latitude: (minLat + maxLat) / 2,
+    longitude: (minLon + maxLon) / 2,
+    latitudeDelta: Math.max(DELTA_MINIMO_ROTA, (maxLat - minLat) * FOLGA_ROTA),
+    longitudeDelta: Math.max(DELTA_MINIMO_ROTA, (maxLon - minLon) * FOLGA_ROTA),
+  };
+}

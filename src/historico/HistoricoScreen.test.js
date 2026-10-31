@@ -3,10 +3,9 @@
  */
 
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
-import { __metodos as mapa } from 'react-native-maps';
 
 import HistoricoScreen from './HistoricoScreen';
-import { calcularPeriodo, formatarHorario } from '../dados/historico';
+import { calcularPeriodo, DELTA_MINIMO_ROTA, formatarHorario } from '../dados/historico';
 
 const firestore = require('firebase/firestore');
 const config = require('../config/firebase');
@@ -94,32 +93,30 @@ describe('HistoricoScreen', () => {
     expect(screen.getAllByTestId('marcador')).toHaveLength(1);
   });
 
-  it('enquadra a rota quando o mapa fica pronto', async () => {
+  it('abre o mapa já enquadrado na rota inteira, com folga', async () => {
     semearPontos('a', [60, 90]);
+
     await abrir();
-    jest.useFakeTimers();
 
-    await fireEvent(screen.getByTestId('mapa'), 'mapReady');
-    await act(() => jest.advanceTimersByTime(300));
-
-    expect(mapa.fitToCoordinates).toHaveBeenCalledWith(
-      [
-        { latitude: 0, longitude: 0 },
-        { latitude: 1, longitude: 1 },
-      ],
-      expect.objectContaining({ animated: true })
-    );
+    expect(screen.getByTestId('mapa').props.initialRegion).toEqual({
+      latitude: 0.5,
+      longitude: 0.5,
+      latitudeDelta: expect.closeTo(1.4),
+      longitudeDelta: expect.closeTo(1.4),
+    });
   });
 
-  it('um ponto: aproxima nele', async () => {
+  it('um ponto: abre perto, mas não colado', async () => {
     semearPontos('a', [60]);
+
     await abrir();
-    jest.useFakeTimers();
 
-    await fireEvent(screen.getByTestId('mapa'), 'mapReady');
-    await act(() => jest.advanceTimersByTime(300));
-
-    expect(mapa.animateCamera).toHaveBeenCalledWith({ center: { latitude: 0, longitude: 0 }, zoom: 16 }, { duration: 600 });
+    expect(screen.getByTestId('mapa').props.initialRegion).toEqual({
+      latitude: 0,
+      longitude: 0,
+      latitudeDelta: DELTA_MINIMO_ROTA,
+      longitudeDelta: DELTA_MINIMO_ROTA,
+    });
   });
 
   it('muitos pontos: só início e fim têm marcador', async () => {

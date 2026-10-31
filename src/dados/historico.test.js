@@ -210,3 +210,47 @@ describe('formatarHorario', () => {
     expect(historico.formatarHorario(momento, true)).toBe('07/09 09:05');
   });
 });
+
+describe('regiaoDaRota', () => {
+  it('sem pontos: null', () => {
+    expect(historico.regiaoDaRota([])).toBeNull();
+  });
+
+  it('centraliza na rota e soma 40% de folga', () => {
+    const regiao = historico.regiaoDaRota([
+      { latitude: -23.5, longitude: -46.7 },
+      { latitude: -23.6, longitude: -46.5 },
+      { latitude: -23.55, longitude: -46.6 },
+    ]);
+
+    expect(regiao.latitude).toBeCloseTo(-23.55);
+    expect(regiao.longitude).toBeCloseTo(-46.6);
+    expect(regiao.latitudeDelta).toBeCloseTo(0.14);
+    expect(regiao.longitudeDelta).toBeCloseTo(0.28);
+  });
+
+  it('nunca mais perto que o mínimo (ponto único ou parado)', () => {
+    const minimo = historico.DELTA_MINIMO_ROTA;
+
+    expect(historico.regiaoDaRota([{ latitude: 1, longitude: 2 }])).toEqual({
+      latitude: 1,
+      longitude: 2,
+      latitudeDelta: minimo,
+      longitudeDelta: minimo,
+    });
+
+    const parado = historico.regiaoDaRota([
+      { latitude: 1, longitude: 2 },
+      { latitude: 1.0001, longitude: 2.0001 },
+    ]);
+    expect(parado.latitudeDelta).toBe(minimo);
+    expect(parado.longitudeDelta).toBe(minimo);
+  });
+
+  it('o mínimo fica na escala de um bairro (entre 400 m e 1 km)', () => {
+    const metros = historico.DELTA_MINIMO_ROTA * 111000;
+
+    expect(metros).toBeGreaterThan(400);
+    expect(metros).toBeLessThan(1000);
+  });
+});

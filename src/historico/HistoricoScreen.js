@@ -3,7 +3,7 @@
  * e ver a rota no mapa.
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import {
   ActivityIndicator,
@@ -24,6 +24,7 @@ import {
   formatarHorario,
   LIMITE_PONTOS_HISTORICO,
   PERIODOS,
+  regiaoDaRota,
 } from '../dados/historico';
 
 import { useEspacoTopo } from '../navegacao/BotaoMenu';
@@ -31,8 +32,6 @@ import { cores, fontes, raio, sombra } from '../theme/theme';
 
 // Acima disso, só início e fim ganham marcador (a rota continua completa).
 const MAXIMO_MARCADORES = 100;
-
-const MARGEM_ENQUADRAMENTO = { top: 60, right: 50, bottom: 60, left: 50 };
 
 // Histórico de localizações: escolher membro → período → rota no mapa.
 export default function HistoricoScreen({ usuario, grupoId }) {
@@ -45,8 +44,6 @@ export default function HistoricoScreen({ usuario, grupoId }) {
   const [historico, setHistorico] = useState(null);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState('');
-
-  const mapaRef = useRef(null);
 
   // Membros ativos da família (nomes de grupos/{g}/membros).
   useEffect(() => {
@@ -108,19 +105,6 @@ export default function HistoricoScreen({ usuario, grupoId }) {
   const coordenadas = pontos.map(({ latitude, longitude }) => ({ latitude, longitude }));
   const comData = periodo === '7dias';
 
-  function enquadrarRota() {
-    if (!mapaRef.current || coordenadas.length === 0) return;
-
-    if (coordenadas.length === 1) {
-      mapaRef.current.animateCamera({ center: coordenadas[0], zoom: 16 }, { duration: 600 });
-    } else {
-      mapaRef.current.fitToCoordinates(coordenadas, {
-        edgePadding: MARGEM_ENQUADRAMENTO,
-        animated: true,
-      });
-    }
-  }
-
   function renderizarConteudo() {
     if (carregando) {
       return (
@@ -173,9 +157,9 @@ export default function HistoricoScreen({ usuario, grupoId }) {
         <View style={styles.mapaCard}>
           <MapView
             key={`${selecionado}-${periodo}`}
-            ref={mapaRef}
             style={styles.mapa}
-            onMapReady={() => setTimeout(enquadrarRota, 300)}
+            // Já abre enquadrado na rota (sem esperar o mapa carregar).
+            initialRegion={regiaoDaRota(coordenadas)}
           >
             {coordenadas.length > 1 && (
               <Polyline
