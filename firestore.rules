@@ -617,6 +617,17 @@ service cloud.firestore {
     }
 
     // ---------------------------------------------------
+    // CONFIGURAÇÕES DO APP (ex.: configuracoes/anuncios): todo
+    // usuário logado lê; ninguém grava pelo app, só pelo console
+    // do Firebase (quem administra o projeto).
+    // ---------------------------------------------------
+
+    match /configuracoes/{documento} {
+      allow read: if autenticado();
+      allow write: if false;
+    }
+
+    // ---------------------------------------------------
     // ÍNDICE DE CPFs: cpfs/{11 números} → { uid }. Um CPF só pode
     // ter uma conta: criar só funciona se o número estiver livre
     // (se já existe, a gravação vira "update", que é proibido).

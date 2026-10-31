@@ -67,6 +67,15 @@ describe('app.config', () => {
     expect(expo.android.blockedPermissions).toContain('android.permission.RECORD_AUDIO');
   });
 
+  it('AdMob: ID do app nos dois sistemas e SKAdNetwork do Google no iPhone', () => {
+    const [, admob] = expo.plugins.find((plugin) => Array.isArray(plugin) && plugin[0] === 'react-native-google-mobile-ads');
+
+    expect(admob.androidAppId).toMatch(/^ca-app-pub-[0-9]+~[0-9]+$/);
+    expect(admob.iosAppId).toMatch(/^ca-app-pub-[0-9]+~[0-9]+$/);
+    expect(admob.androidAppId).not.toBe(admob.iosAppId);
+    expect(admob.skAdNetworkItems).toContain('cstr6suwn9.skadnetwork');
+  });
+
   it('os textos de permissão dizem para que servem, em português', () => {
     const textos = expo.plugins
       .filter(Array.isArray)

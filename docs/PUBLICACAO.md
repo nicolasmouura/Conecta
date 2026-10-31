@@ -144,7 +144,56 @@ o da Apple e não usa essa chave.
    e-mail" e recusa o app. Use as notas de `docs/textos-das-lojas.md`, que
    explicam o CPF, a localização e o SOS.
 
-## 9. Próximas versões
+## 9. Anúncios (AdMob)
+
+O app já tem banner (Menu e Histórico) e intersticial (ao voltar para o Menu,
+no máximo a cada 2 min e depois de 3 telas, nunca saindo do SOS ou do perfil).
+Hoje ele usa os **IDs de teste do Google**:
+
+- **No Expo Go** aparecem anúncios **simulados** (o Expo Go não tem o código
+  nativo do AdMob).
+- **Num build próprio** (`eas build --platform android --profile preview`)
+  aparecem anúncios reais de teste, marcados como "Test Ad".
+
+Para ganhar com os anúncios, antes de publicar:
+
+1. Crie a conta em [admob.google.com](https://admob.google.com), adicione o
+   app Android e o app iOS e crie, em cada um, um bloco **Banner adaptativo**
+   e um **Intersticial**.
+2. Troque os IDs de teste pelos seus:
+   - IDs dos **apps** (com `~`): `app.json`, plugin
+     `react-native-google-mobile-ads` (`androidAppId` e `iosAppId` são
+     diferentes um do outro);
+   - IDs dos **blocos** (com `/`): `IDS_ANUNCIOS` em
+     `src/anuncios/regrasAnuncios.js`.
+3. Publique um arquivo `app-ads.txt` no site do desenvolvedor informado na loja
+   (o AdMob mostra o conteúdo).
+4. **Nunca toque nos seus próprios anúncios reais** para testar: o Google
+   bloqueia a conta. Para testar, cadastre o seu celular como dispositivo de
+   teste no AdMob.
+
+### Mudar os anúncios sem versão nova
+
+Firebase Console → Firestore → coleção `configuracoes` → documento
+`anuncios` (crie na primeira vez; as regras do passo 4 precisam estar
+publicadas). Todos os campos são opcionais; o que faltar usa o padrão do
+código:
+
+| Campo | Tipo | Padrão |
+|---|---|---|
+| `anunciosLigados` | boolean | `true` |
+| `banner` | boolean | `true` |
+| `intersticial` | boolean | `true` |
+| `intervaloMinutos` | number (0 a 1440) | `2` |
+| `telasAntesDoIntersticial` | number (0 a 50) | `3` |
+| `idBanner`, `idIntersticial` | string `ca-app-pub-.../...` | IDs de teste |
+
+Para valer só em um sistema, crie um campo `android` ou `ios` do tipo
+**map** com os mesmos campos dentro (ex.: `ios` → `intersticial: false`). A
+mudança chega aos celulares em segundos. SOS, login, biometria e Meu Perfil
+nunca têm anúncio, seja qual for a configuração.
+
+## 10. Próximas versões
 
 - Aumente `version` em `app.json` (ex.: 1.0.1). O número de build sobe
   sozinho (`autoIncrement` no `eas.json`).

@@ -57,6 +57,7 @@ const estouBem = require('./src/dados/estouBem');
 const historico = require('./src/dados/historico');
 const fila = require('./src/dados/filaEnvio');
 const conta = require('./src/dados/conta');
+const { observarConfigAnuncios } = require('./src/anuncios/regrasAnuncios');
 const { banco } = require('./src/dados/bancoLocal');
 const { apagarDadosLocais } = require('./src/dados/armazenamentoLocal');
 
@@ -647,5 +648,31 @@ describe('excluir a conta', () => {
     // O CPF ficou livre de novo.
     await cadastrar({ ...PESSOAS.caio, cpf: PESSOAS.ana.cpf });
     expect(await lerDireto('usuarios/caio')).toBeDefined();
+  });
+});
+
+describe('configurações do app (anúncios)', () => {
+  it('quem está logado lê a configuração, com o bloco do sistema', async () => {
+    await gravarDireto('configuracoes/anuncios', { intervaloMinutos: 2, ios: { intersticial: false } });
+    await cadastrar(PESSOAS.ana);
+
+    const config = await primeiraEntrega(
+      (ok) => observarConfigAnuncios('ios', ok),
+      (valor) => valor.intersticial === false
+    );
+
+    expect(config).toMatchObject({ intersticial: false, intervalo: 2 * 60 * 1000 });
+  });
+
+  it('ninguém grava pelo app', async () => {
+    await cadastrar(PESSOAS.ana);
+
+    await assertFails(setDoc(doc(mockSessao.db, 'configuracoes/anuncios'), { anunciosLigados: false }));
+  });
+
+  it('sem login não lê', async () => {
+    await gravarDireto('configuracoes/anuncios', { banner: true });
+
+    await assertFails(getDoc(doc(ambiente.unauthenticatedContext().firestore(), 'configuracoes/anuncios')));
   });
 });

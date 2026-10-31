@@ -464,6 +464,79 @@ describe('App', () => {
     });
   });
 
+  describe('anúncios (simulados: os testes rodam sem o AdMob nativo, como no Expo Go)', () => {
+    it('banner no Menu e no Histórico', async () => {
+      await abrir();
+      expect(screen.getByTestId('banner-simulado')).toBeOnTheScreen();
+
+      await tocar('Abrir histórico');
+      expect(screen.getByTestId('banner-simulado')).toBeOnTheScreen();
+    });
+
+    it.each(['Abrir SOS', 'Abrir perfil', 'Abrir mapa', 'Abrir família'])('sem banner em "%s"', async (botao) => {
+      await abrir();
+
+      await tocar(botao);
+
+      expect(screen.queryByTestId('banner-simulado')).toBeNull();
+    });
+
+    it('banner desligado no console do Firebase: some do Menu', async () => {
+      firestore.__semear('configuracoes/anuncios', { banner: false });
+
+      await abrir();
+
+      expect(screen.queryByTestId('banner-simulado')).toBeNull();
+    });
+
+    it('o bloco do sistema do aparelho vale', async () => {
+      firestore.__semear('configuracoes/anuncios', {
+        banner: true,
+        android: { anunciosLigados: false },
+        ios: { anunciosLigados: false },
+      });
+
+      await abrir();
+
+      expect(screen.queryByTestId('banner-simulado')).toBeNull();
+    });
+
+    it('sem banner no login', async () => {
+      await abrir(null);
+
+      expect(screen.queryByTestId('banner-simulado')).toBeNull();
+    });
+
+    it('intersticial ao voltar ao Menu depois de 3 telas', async () => {
+      await abrir();
+
+      for (const botao of ['Abrir mapa', 'Abrir família']) {
+        await tocar(botao);
+        await tocar('‹ Menu');
+      }
+      expect(screen.queryByRole('button', { name: 'Fechar anúncio' })).toBeNull();
+
+      await tocar('Abrir histórico');
+      await tocar('‹ Menu');
+
+      const fechar = screen.getByRole('button', { name: 'Fechar anúncio' });
+      expect(fechar).toBeOnTheScreen();
+      await fireEvent.press(fechar);
+      expect(screen.queryByRole('button', { name: 'Fechar anúncio' })).toBeNull();
+    });
+
+    it('nunca ao sair do SOS', async () => {
+      await abrir();
+
+      for (const botao of ['Abrir mapa', 'Abrir família', 'Abrir SOS']) {
+        await tocar(botao);
+        await tocar('‹ Menu');
+      }
+
+      expect(screen.queryByRole('button', { name: 'Fechar anúncio' })).toBeNull();
+    });
+  });
+
   it('nome alterado no perfil chega ao compartilhamento da localização', async () => {
     await abrir();
     await tocar('Abrir perfil');

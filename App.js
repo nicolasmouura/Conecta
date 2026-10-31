@@ -14,6 +14,7 @@ import {
 import {
   Alert,
   AppState,
+  Platform,
   StyleSheet,
   Text,
   View,
@@ -66,6 +67,13 @@ import { useCompartilharLocalizacao } from './src/mapa/compartilharLocalizacao';
 import { useVoltarAndroid } from './src/navegacao/voltar';
 import BotaoMenu from './src/navegacao/BotaoMenu';
 import AvisoOffline from './src/navegacao/AvisoOffline';
+import { useIntersticial } from './src/anuncios/Intersticial';
+import BannerAnuncio from './src/anuncios/BannerAnuncio';
+import {
+  configPadrao,
+  observarConfigAnuncios,
+  telaTemBanner,
+} from './src/anuncios/regrasAnuncios';
 
 import { cores } from './src/theme/theme';
 
@@ -344,6 +352,23 @@ export default function App() {
     temGrupo ? grupoId : null
   );
 
+  // Configuração dos anúncios pelo console do Firebase (só logado: as
+  // regras do Firestore exigem). Até chegar, valem os padrões do código.
+  const [configAnuncios, setConfigAnuncios] = useState(() => configPadrao(Platform.OS));
+
+  useEffect(() => {
+    if (!usuario?.uid) {
+      setConfigAnuncios(configPadrao(Platform.OS));
+      return undefined;
+    }
+
+    return observarConfigAnuncios(Platform.OS, setConfigAnuncios);
+  }, [usuario?.uid]);
+
+  // Anúncio em tela cheia ao voltar para o Menu (regrasAnuncios.js).
+  // Antes do login nada é carregado.
+  const intersticial = useIntersticial(configAnuncios, Boolean(usuario));
+
   // Voltar do Android nas telas abertas pelo Menu: volta ao Menu, como
   // o "‹ Menu". As subtelas registram o próprio voltar ao abrir e têm
   // prioridade. No Menu, o voltar segue o padrão do Android.
@@ -372,6 +397,7 @@ export default function App() {
       return;
     }
 
+    intersticial.mostrarSePuder(tela);
     setTela('menu');
   }
 
@@ -389,6 +415,7 @@ export default function App() {
       return;
     }
 
+    intersticial.registrarTela();
     setTela(chave);
   }
 
@@ -666,12 +693,19 @@ export default function App() {
       <View style={styles.container}>
         {conteudo}
 
+        {/* Banner no rodapé só das telas permitidas (nunca no SOS). */}
+        {telaTemBanner(tela, configAnuncios) && !telaCheia && (
+          <BannerAnuncio unitId={configAnuncios.idBanner} />
+        )}
+
         {tela !== 'menu' && !telaCheia && (
           <BotaoMenu onPress={voltarMenu} />
         )}
 
         {/* No Menu o aviso é uma faixa dentro da tela (Menu.js). */}
         {tela !== 'menu' && !telaCheia && <AvisoOffline />}
+
+        {intersticial.elemento}
 
         <StatusBar style="auto" />
       </View>

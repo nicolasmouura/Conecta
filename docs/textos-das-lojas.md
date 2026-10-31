@@ -51,9 +51,11 @@ família,localização,mapa,sos,emergência,segurança,rastreador,filhos,pais,id
 - **Coleta ou compartilha dados?** Sim.
 - **Criptografados em trânsito?** Sim.
 - **O usuário pode pedir a exclusão?** Sim (no app e por e-mail).
-- **Compartilhamento com terceiros:** Não. (O que outros membros da família
-  veem é transferência feita pela própria pessoa ao entrar na família; o
-  Firebase é prestador de serviço.)
+- **Compartilhamento com terceiros:** Sim, só o **ID de publicidade** com o
+  Google AdMob, para publicidade. (O que outros membros da família veem é
+  transferência feita pela própria pessoa ao entrar na família; o Firebase é
+  prestador de serviço.)
+- **O app contém anúncios?** Sim (Play Console → Conteúdo do app → Anúncios).
 
 | Tipo de dado (categoria do Play) | Coletado | Obrigatório? | Finalidade |
 |---|---|---|---|
@@ -64,15 +66,19 @@ família,localização,mapa,sos,emergência,segurança,rastreador,filhos,pais,id
 | Informações pessoais → Endereço | Sim | Obrigatório | Funcionalidade do app |
 | Informações pessoais → Outras informações (CPF) | Sim | Obrigatório | Prevenção de fraudes (uma conta por pessoa) |
 | Fotos e vídeos → Fotos | Sim | Opcional | Funcionalidade do app (foto de perfil) |
-| Informações e desempenho do app / Identificadores do dispositivo | Não | | |
+| Identificadores do dispositivo ou outros → ID de publicidade | Sim (compartilhado com o AdMob) | Obrigatório | Publicidade |
+| Informações e desempenho do app | Não | | |
 
 ---
 
 ## App Store: Privacidade do app
 
-- **Rastreamento:** Não (o app não rastreia o usuário entre apps e sites).
-- Todos os dados abaixo: **vinculados à identidade**, finalidade
-  **Funcionalidade do app**.
+- **Rastreamento:** Não. Os anúncios do AdMob são **não personalizados**, então
+  o app não mostra o pedido de rastreamento (App Tracking Transparency).
+- Os dados abaixo: **vinculados à identidade**, finalidade **Funcionalidade do
+  app**. Além deles, o AdMob coleta **Identificadores → ID do dispositivo** e
+  **Dados de uso → Interação com o produto e Dados de publicidade**, **não
+  vinculados** à identidade, finalidade **Publicidade de terceiros**.
 
 | Categoria | Tipo |
 |---|---|

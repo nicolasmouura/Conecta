@@ -59,9 +59,15 @@ só recebe "confirmado" ou "não confirmado".
   o endereço.
 - **Mapas**: o Google Maps (Android) e o Apple Maps (iPhone) recebem a área do
   mapa exibida na tela.
+- **Google AdMob** (anúncios): o app mostra anúncios **não personalizados** no
+  Menu e no Histórico (nunca no SOS). Para entregá-los, o Google recebe dados
+  técnicos do aparelho (como o identificador de publicidade, o modelo e o
+  endereço IP). O Conecta **não envia ao AdMob** sua localização, seu perfil
+  nem dados da família. Veja a política do Google em
+  https://policies.google.com/technologies/ads
 
-**Não vendemos seus dados, não exibimos anúncios e não usamos seus dados para
-rastreamento publicitário.**
+**Não vendemos seus dados e não usamos seus dados para rastreamento
+publicitário entre apps.**
 
 ## 4. Por quanto tempo guardamos
 
