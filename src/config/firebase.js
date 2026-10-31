@@ -6,7 +6,7 @@
 import { getApp, getApps, initializeApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
 import { getAuth, getReactNativePersistence, initializeAuth } from 'firebase/auth';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { armazenamentoSessao } from '../dados/bancoLocal';
 
 /*
  * Firebase: Cloud Firestore (dados) e Authentication (contas).
@@ -36,12 +36,12 @@ if (faltando.length) {
 // Reaproveita o app já criado (o hot reload executa este arquivo de novo).
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 
-// Sessão persistente pelo mecanismo oficial do Firebase (AsyncStorage).
+// Sessão persistente pelo mecanismo oficial do Firebase (SQLite).
 // initializeAuth só pode ser chamado uma vez; no hot reload usa a instância existente.
 function iniciarAuth() {
   try {
     return initializeAuth(app, {
-      persistence: getReactNativePersistence(AsyncStorage),
+      persistence: getReactNativePersistence(armazenamentoSessao),
     });
   } catch (erro) {
     if (erro?.code === 'auth/already-initialized') {

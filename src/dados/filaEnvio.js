@@ -14,7 +14,7 @@ import {
 } from 'firebase/firestore';
 
 import { db } from '../config/firebase';
-import { gravarLocal, lerLocal } from './armazenamentoLocal';
+import { banco } from './bancoLocal';
 
 /*
  * Depois disso o item já não diz nada sobre agora e é descartado.
@@ -27,33 +27,31 @@ const VALIDADE = {
   estouBem: 60 * 60 * 1000,
 };
 
-function chaveFila(uid) {
-  return `fila:${uid}`;
+function itemDaLinha(linha) {
+  return { id: linha.id, tipo: linha.tipo, dados: JSON.parse(linha.dados), criadoEm: linha.criado_em };
 }
 
-// Leituras e gravações da fila, uma de cada vez (sem perder itens).
-let filaOcupada = Promise.resolve();
+// "local" é o SQLite do aparelho; "db" é o Firestore.
+export async function lerFila(uid) {
+  try {
+    const local = await banco();
+    const linhas = await local.getAllAsync('SELECT * FROM fila WHERE uid = ? ORDER BY ordem', uid);
 
-function emSerie(tarefa) {
-  const proxima = filaOcupada.then(tarefa, tarefa);
-  filaOcupada = proxima.catch(() => {});
-  return proxima;
+    return linhas.map(itemDaLinha);
+  } catch (erro) {
+    console.log('Fila do aparelho ilegível:', erro.message);
+    return [];
+  }
 }
 
-export function lerFila(uid) {
-  return emSerie(async () => (await lerLocal(chaveFila(uid))) || []);
-}
+export async function removerDaFila(uid, id) {
+  try {
+    const local = await banco();
 
-function alterarFila(uid, alterar) {
-  return emSerie(async () => {
-    const fila = alterar((await lerLocal(chaveFila(uid))) || []);
-
-    await gravarLocal(chaveFila(uid), fila);
-  });
-}
-
-export function removerDaFila(uid, id) {
-  return alterarFila(uid, (fila) => fila.filter((item) => item.id !== id));
+    await local.runAsync('DELETE FROM fila WHERE uid = ? AND id = ?', uid, id);
+  } catch (erro) {
+    console.log('Item não removido da fila:', erro.message);
+  }
 }
 
 /*
@@ -146,7 +144,8 @@ export function processarFila(uid) {
 /*
  * Guarda no aparelho e já entrega ao Firebase. confirmacao termina
  * quando o servidor recebe (sem internet, só quando a conexão voltar)
- * e falha se as regras recusarem.
+ * e falha se as regras recusarem. Se o aparelho não conseguir guardar,
+ * entrega mesmo assim: o SOS nunca deixa de sair por isso.
  */
 export async function enfileirar(uid, tipo, dados) {
   const item = {
@@ -156,7 +155,22 @@ export async function enfileirar(uid, tipo, dados) {
     criadoEm: Date.now(),
   };
 
-  await alterarFila(uid, (fila) => [...fila, item]);
+  try {
+    const local = await banco();
+
+    await local.runAsync(
+      'INSERT INTO fila (id, uid, tipo, dados, criado_em) VALUES (?, ?, ?, ?, ?)',
+      item.id,
+      uid,
+      tipo,
+      JSON.stringify(dados ?? {}),
+      item.criadoEm
+    );
+  } catch (erro) {
+    console.log('Fila do aparelho indisponível, enviando direto:', tipo, erro.message);
+    return { id: item.id, confirmacao: enviar(uid, item) };
+  }
+
   await processarFila(uid);
 
   return { id: item.id, confirmacao: entregues.get(item.id) ?? Promise.resolve() };

@@ -1,13 +1,10 @@
 /*
- * Cópias locais (AsyncStorage) para o app funcionar sem internet. O
+ * Cópias locais (SQLite) para o app funcionar sem internet. O
  * Firebase continua sendo a fonte oficial: aqui fica só a última
  * versão recebida de cada dado, apagada ao sair da conta.
  */
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
-
-// Separa as chaves do app das do Firebase (sessão do login).
-const PREFIXO = 'conecta:';
+import { banco } from './bancoLocal';
 
 // Sem resposta do Firebase nesse tempo, o app segue com a cópia local.
 export const TEMPO_LIMITE = 8 * 1000;
@@ -42,9 +39,10 @@ function substituto(chave, valor) {
 // null quando não há cópia (ou ela não pôde ser lida).
 export async function lerLocal(chave) {
   try {
-    const texto = await AsyncStorage.getItem(PREFIXO + chave);
+    const local = await banco();
+    const linha = await local.getFirstAsync('SELECT valor FROM copias WHERE chave = ?', chave);
 
-    return texto === null ? null : JSON.parse(texto);
+    return linha ? JSON.parse(linha.valor) : null;
   } catch (erro) {
     console.log('Cópia local ilegível:', chave, erro.message);
     return null;
@@ -53,7 +51,13 @@ export async function lerLocal(chave) {
 
 export async function gravarLocal(chave, valor) {
   try {
-    await AsyncStorage.setItem(PREFIXO + chave, JSON.stringify(valor, substituto));
+    const local = await banco();
+
+    await local.runAsync(
+      'INSERT OR REPLACE INTO copias (chave, valor) VALUES (?, ?)',
+      chave,
+      JSON.stringify(valor, substituto)
+    );
   } catch (erro) {
     console.log('Cópia local não gravada:', chave, erro.message);
   }
@@ -61,11 +65,9 @@ export async function gravarLocal(chave, valor) {
 
 // Ao sair da conta: nada de uma conta fica para a próxima.
 export async function apagarDadosLocais() {
-  const chaves = (await AsyncStorage.getAllKeys()).filter((chave) => chave.startsWith(PREFIXO));
+  const local = await banco();
 
-  if (chaves.length) {
-    await AsyncStorage.multiRemove(chaves);
-  }
+  await local.execAsync('DELETE FROM copias; DELETE FROM fila;');
 }
 
 // Listas: os itens do cache do Firebase substituem os da cópia (por id).
