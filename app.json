@@ -86,6 +86,12 @@
       "expo-font",
       "expo-secure-store",
       "expo-sqlite"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "8679c2f6-bcc5-4070-a04c-65d789b99047"
+      }
+    },
+    "owner": "gabrieltalyss-team"
   }
 }

@@ -47,9 +47,10 @@ Confira em expo.dev → seu projeto → Environment variables: as 6
 
    ```bash
    npx firebase login
-   npx firebase use --add          # escolha o projeto do Conecta
    npx firebase deploy --only firestore:rules,firestore:indexes
    ```
+
+   O projeto (`apprastreamento-ffd42`) já está em `.firebaserc`.
 
 2. Firebase Console → Authentication → Templates: idioma **Português (Brasil)**
    nos e-mails de confirmação e de redefinição de senha.
