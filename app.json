@@ -7,45 +7,69 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
-      "supportsTablet": true,
-      "infoPlist": {
-        "NSCameraUsageDescription": "Este app precisa acessar a câmera para tirar fotos."
-      },
-      "bundleIdentifier": "com.conecta"
+      "supportsTablet": false,
+      "bundleIdentifier": "br.com.conecta.app",
+      "config": {
+        "usesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#1B71F9"
       },
       "permissions": [
         "android.permission.CAMERA"
       ],
-      "package": "com.conecta"
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.SYSTEM_ALERT_WINDOW"
+      ],
+      "package": "br.com.conecta.app"
     },
     "plugins": [
       [
         "expo-local-authentication",
         {
-          "faceIDPermission": "Permitir $(PRODUCT_NAME) a usar o Face ID."
+          "faceIDPermission": "O Conecta usa o Face ID para confirmar que é você ao abrir o app e ao encerrar um SOS."
         }
       ],
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "O Conecta precisa da sua localização para mostrar sua posição no mapa e compartilhá-la com sua família."
+          "locationWhenInUsePermission": "O Conecta usa sua localização, enquanto o app está aberto, para mostrar sua posição no mapa, compartilhá-la com sua família e enviá-la junto com um SOS.",
+          "locationAlwaysAndWhenInUsePermission": false,
+          "locationAlwaysPermission": false,
+          "locationFullAccuracyPermission": false,
+          "motionUsagePermission": false,
+          "isIosBackgroundLocationEnabled": false,
+          "isAndroidBackgroundLocationEnabled": false
         }
       ],
       [
         "expo-camera",
         {
-          "cameraPermission": "Permita que o aplicativo utilize a câmera."
+          "cameraPermission": "O Conecta usa a câmera para você tirar a sua foto de perfil.",
+          "microphonePermission": false,
+          "recordAudioAndroid": false,
+          "barcodeScannerEnabled": false
         }
       ],
       [
         "expo-image-picker",
         {
-          "photosPermission": "Permita que o aplicativo acesse suas fotos."
+          "photosPermission": "O Conecta acessa suas fotos para você escolher a sua foto de perfil.",
+          "cameraPermission": "O Conecta usa a câmera para você tirar a sua foto de perfil.",
+          "microphonePermission": false
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#F4F8FF"
         }
       ],
       "expo-font",
