@@ -19,13 +19,15 @@ import { Feather } from '@expo/vector-icons';
 import MapView, { Marker } from 'react-native-maps';
 
 import {
-  acionarSOS,
   botoesConfirmacaoSOS,
   horarioDoAlerta,
   observarSOSAtivos,
 } from '../dados/sos';
+import { acionarEmergencia } from '../dados/emergencia';
 import { coordenadaValida } from '../dados/buscarFamiliares';
 import { enviarSOSPorSMS } from '../dados/smsSOS';
+import { pedirPermissaoSMS } from '../dados/smsAutomatico';
+import { NUMEROS_EMERGENCIA, ligarParaEmergencia } from '../dados/ligacao';
 
 import { useEspacoTopo } from '../navegacao/BotaoMenu';
 import { cores, fontes, raio, sombra } from '../theme/theme';
@@ -116,6 +118,100 @@ function BotaoSMS({ onPress, abrindo }) {
   );
 }
 
+// Abre o discador com o número de emergência (funciona em qualquer rede).
+function BotoesLigar() {
+  async function ligar(numero) {
+    if (!(await ligarParaEmergencia(numero))) {
+      Alert.alert('Não foi possível ligar', `Disque ${numero} no seu telefone.`);
+    }
+  }
+
+  const [principal, ...outros] = NUMEROS_EMERGENCIA;
+
+  return (
+    <View style={styles.ligar}>
+      <Text style={styles.ligarTitulo}>Ligar para a emergência</Text>
+
+      <TouchableOpacity
+        style={styles.botaoDestaque}
+        onPress={() => ligar(principal.numero)}
+        accessibilityRole="button"
+        accessibilityLabel={`Ligar ${principal.numero} ${principal.nome}`}
+      >
+        <View style={styles.botaoDestaqueTopo}>
+          <Feather name="phone-call" size={24} color={cores.textoSobrePrimaria} />
+          <Text style={styles.botaoDestaqueTitulo}>PEDIR SOCORRO</Text>
+        </View>
+
+        <Text style={styles.botaoDestaqueNumero}>Liga para a emergência ({principal.numero})</Text>
+
+        <Text style={styles.botaoDestaqueAviso}>
+          Funciona sem internet e sem sinal da sua operadora, até sem chip
+        </Text>
+      </TouchableOpacity>
+
+      <Text style={styles.dicaSMS}>
+        Escolha um serviço específico, se souber qual precisa:
+      </Text>
+
+      <View style={styles.ligarLinha}>
+        {outros.map(({ numero, nome, uso }) => (
+          <TouchableOpacity
+            key={numero}
+            style={styles.botaoLigar}
+            onPress={() => ligar(numero)}
+            accessibilityRole="button"
+            accessibilityLabel={`Ligar ${numero} ${nome}`}
+          >
+            <Text style={styles.botaoLigarNome}>
+              {nome} <Text style={styles.botaoLigarNumero}>{numero}</Text>
+            </Text>
+            <Text style={styles.botaoLigarUso}>{uso}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+/*
+ * O que contar à pessoa depois de acionar. null = nada a dizer (o app
+ * de mensagens já está aberto e o alerta do app foi registrado).
+ */
+export function resumoDaEmergencia({ sms, sos }) {
+  const linhas = [];
+  let atencao = false;
+
+  if (sms.resultado === 'automatico') {
+    linhas.push(
+      `SMS enviado para ${sms.enviados} ${sms.enviados === 1 ? 'familiar' : 'familiares'}.`
+    );
+
+    if (sms.falhas > 0) {
+      atencao = true;
+      linhas.push(`Não saiu para ${sms.falhas}.`);
+    }
+  } else if (sms.resultado !== 'aberto') {
+    atencao = true;
+    linhas.push('Não foi possível avisar por SMS. Ligue para o 112: ele funciona em qualquer rede disponível.');
+  }
+
+  if (sos?.erro) {
+    atencao = true;
+    linhas.push('O alerta no app não foi registrado.');
+  } else if (sos && !sos.jaExistia) {
+    linhas.push(
+      sos.enviado
+        ? 'Alerta enviado no app.'
+        : 'Sem internet: o alerta no app sai quando a conexão voltar.'
+    );
+  }
+
+  if (sms.resultado === 'aberto' && !atencao) return null;
+
+  return { titulo: atencao ? 'Atenção' : 'SOS acionado', mensagem: linhas.join('\n') };
+}
+
 // Tela de emergência: acionar e acompanhar SOS. Encerrar o próprio SOS
 // só em Perfil → Configurações → Segurança (sos/EncerrarSOS.js).
 export default function SOSScreen({ usuario, grupoId, posicaoAtual, posicaoEm }) {
@@ -125,6 +221,12 @@ export default function SOSScreen({ usuario, grupoId, posicaoAtual, posicaoEm })
   const [erro, setErro] = useState('');
   const [enviando, setEnviando] = useState(false);
   const [abrindoSMS, setAbrindoSMS] = useState(false);
+
+  // Android: a permissão do SMS automático é pedida agora, com calma,
+  // e não no meio da emergência.
+  useEffect(() => {
+    pedirPermissaoSMS();
+  }, []);
 
   useEffect(() => {
     if (!grupoId) return;
@@ -158,8 +260,6 @@ export default function SOSScreen({ usuario, grupoId, posicaoAtual, posicaoEm })
     }
   }
 
-  const opcaoSMS = { text: 'Avisar por SMS', onPress: avisarPorSMS };
-
   if (!grupoId) {
     return (
       <View style={[styles.container, styles.centro]}>
@@ -168,6 +268,7 @@ export default function SOSScreen({ usuario, grupoId, posicaoAtual, posicaoEm })
         </Text>
 
         <BotaoSMS onPress={avisarPorSMS} abrindo={abrindoSMS} />
+        <BotoesLigar />
       </View>
     );
   }
@@ -180,34 +281,26 @@ export default function SOSScreen({ usuario, grupoId, posicaoAtual, posicaoEm })
     try {
       setEnviando(true);
 
-      const resultado = await acionarSOS({
+      // SMS e alerta do app saem juntos: sem internet, o SMS não espera.
+      const resultado = await acionarEmergencia({
         uid: usuario.uid,
         grupoId,
         nome: usuario.nome,
+        posicao: posicaoAtual,
+        posicaoEm,
       });
 
-      if (!resultado.jaExistia && !resultado.enviado) {
-        // Sem internet: o alerta está guardado e sai quando a conexão voltar.
-        Alert.alert(
-          'Sem internet',
-          'Seu SOS foi guardado e será enviado à sua família assim que a conexão voltar. Avise também por SMS, que funciona sem internet.',
-          [{ text: 'OK' }, opcaoSMS]
-        );
-      } else if (!resultado.jaExistia) {
-        Alert.alert(
-          'SOS acionado',
-          resultado.comLocalizacao
-            ? 'Sua família foi avisada com sua última localização.'
-            : 'Sua família foi avisada. Não havia localização disponível.',
-          [{ text: 'OK' }, opcaoSMS]
-        );
+      const resumo = resumoDaEmergencia(resultado);
+
+      if (resumo) {
+        Alert.alert(resumo.titulo, resumo.mensagem, [{ text: 'OK' }]);
       }
     } catch (e) {
       console.error('Erro ao acionar SOS:', e);
       Alert.alert(
         'Não foi possível acionar o SOS',
-        'Verifique sua conexão e tente novamente, ou avise sua família por SMS.',
-        [{ text: 'OK' }, opcaoSMS]
+        'Avise sua família por SMS ou ligue para a emergência.',
+        [{ text: 'OK' }]
       );
     } finally {
       setEnviando(false);
@@ -217,7 +310,7 @@ export default function SOSScreen({ usuario, grupoId, posicaoAtual, posicaoEm })
   function pedirAcionamento() {
     Alert.alert(
       'Acionar SOS?',
-      'Sua família verá um alerta de emergência com seu nome, o horário e sua última localização conhecida.',
+      'Sua família receberá um SMS e um alerta de emergência com seu nome, o horário e sua última localização conhecida.',
       botoesConfirmacaoSOS(confirmarAcionamento)
     );
   }
@@ -259,6 +352,8 @@ export default function SOSScreen({ usuario, grupoId, posicaoAtual, posicaoEm })
           )}
 
           <BotaoSMS onPress={avisarPorSMS} abrindo={abrindoSMS} />
+
+          <BotoesLigar />
 
           <Text style={styles.secao}>SOS ativos da família</Text>
 
@@ -439,6 +534,88 @@ const styles = StyleSheet.create({
     lineHeight: 17,
     color: cores.textoSecundario,
     textAlign: 'center',
+  },
+
+  ligar: {
+    alignSelf: 'stretch',
+    marginTop: 22,
+    gap: 10,
+  },
+
+  ligarTitulo: {
+    fontSize: 15,
+    fontFamily: fontes.destaque,
+    color: cores.texto,
+  },
+
+  botaoDestaque: {
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 16,
+    paddingHorizontal: 14,
+    borderRadius: raio.card,
+    backgroundColor: cores.erro,
+    ...sombra,
+  },
+
+  botaoDestaqueTopo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+
+  botaoDestaqueTitulo: {
+    fontSize: 24,
+    fontFamily: fontes.titulo,
+    color: cores.textoSobrePrimaria,
+    letterSpacing: 1,
+  },
+
+  botaoDestaqueNumero: {
+    fontSize: 15,
+    fontFamily: fontes.destaque,
+    color: cores.textoSobrePrimaria,
+  },
+
+  botaoDestaqueAviso: {
+    fontSize: 13,
+    lineHeight: 18,
+    textAlign: 'center',
+    color: cores.textoSobrePrimaria,
+  },
+
+  ligarLinha: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+
+  botaoLigar: {
+    flexGrow: 1,
+    flexBasis: '28%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
+    paddingVertical: 10,
+    borderRadius: raio.card,
+    borderWidth: 1.5,
+    borderColor: cores.erro,
+    backgroundColor: cores.superficie,
+  },
+
+  botaoLigarNome: {
+    fontSize: 14,
+    fontFamily: fontes.destaque,
+    color: cores.erro,
+  },
+
+  botaoLigarNumero: {
+    fontFamily: fontes.titulo,
+  },
+
+  botaoLigarUso: {
+    fontSize: 11,
+    color: cores.textoSecundario,
   },
 
   dicaEncerrar: {

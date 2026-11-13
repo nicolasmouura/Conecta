@@ -157,6 +157,42 @@ describe('buscarTelefonesDaFamilia', () => {
   });
 });
 
+describe('telefonesParaSOS', () => {
+  it('sem família, lista vazia', async () => {
+    expect(await smsSOS.telefonesParaSOS(null, 'a')).toEqual([]);
+  });
+
+  it('com cópia no aparelho, usa a cópia sem esperar a rede', async () => {
+    await local.gravarLocal('telefones:g1', ['21900000000']);
+    firestore.__falhar('getDocs', { code: 'unavailable' });
+
+    expect(await smsSOS.telefonesParaSOS('g1', 'a')).toEqual(['21900000000']);
+  });
+
+  it('com cópia, atualiza a cópia em segundo plano', async () => {
+    semearFamilia();
+    await local.gravarLocal('telefones:g1', ['21900000000']);
+
+    await smsSOS.telefonesParaSOS('g1', 'a');
+    await esperar();
+
+    expect(await local.lerLocal('telefones:g1')).toEqual(['21912345678']);
+  });
+
+  it('sem cópia, busca na rede', async () => {
+    semearFamilia();
+
+    expect(await smsSOS.telefonesParaSOS('g1', 'a')).toEqual(['21912345678']);
+  });
+
+  it('cópia vazia não vale: busca na rede', async () => {
+    semearFamilia();
+    await local.gravarLocal('telefones:g1', []);
+
+    expect(await smsSOS.telefonesParaSOS('g1', 'a')).toEqual(['21912345678']);
+  });
+});
+
 describe('ultimaPosicaoDoAparelho', () => {
   it('devolve a última posição do sistema', async () => {
     Location.getLastKnownPositionAsync.mockResolvedValue({ coords: { latitude: 1, longitude: 2 }, timestamp: 50 });

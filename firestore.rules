@@ -267,6 +267,26 @@ service cloud.firestore {
         && request.resource.data.encerradoEm == request.time;
     }
 
+    // Token de notificação (tokensPush/{uid}): do próprio usuário, na
+    // família do perfil, com a forma de um token da Expo e horário do
+    // servidor. A família lê para mandar o push do SOS.
+    function tokenPushValido(userId) {
+      let dados = request.resource.data;
+      let campos = ['uid', 'grupoId', 'token', 'plataforma', 'atualizadoEm'];
+      return autenticado()
+        && meuUid() == userId
+        && dados.keys().hasAll(campos)
+        && dados.keys().hasOnly(campos)
+        && dados.uid == meuUid()
+        && dados.grupoId == get(caminhoUsuario(meuUid())).data.get('grupoId', null)
+        && ehMembro(dados.grupoId)
+        && dados.token is string
+        && dados.token.size() <= 200
+        && dados.token.matches('^Expo(nent)?PushToken.[A-Za-z0-9_-]+.$')
+        && dados.plataforma in ['android', 'ios']
+        && dados.atualizadoEm == request.time;
+    }
+
     // Mesma normalização do app (normalizarNome em salvarUsuario.js).
     function nomeNormalizado(nome) {
       return nome.lower().replace('[ \t]+', ' ').trim();
@@ -593,6 +613,20 @@ service cloud.firestore {
       allow update: if encerramentoSOSValido();
 
       allow delete: if autenticado() && resource.data.uid == meuUid();
+    }
+
+    // ---------------------------------------------------
+    // TOKENS DE NOTIFICAÇÃO: o dono e a família dele leem (a família
+    // precisa deles para avisar do SOS); só o dono grava e apaga.
+    // ---------------------------------------------------
+
+    match /tokensPush/{userId} {
+      allow read: if autenticado()
+        && (meuUid() == userId || ehMembro(resource.data.grupoId));
+
+      allow create, update: if tokenPushValido(userId);
+
+      allow delete: if autenticado() && meuUid() == userId;
     }
 
     // ---------------------------------------------------

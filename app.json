@@ -19,7 +19,8 @@
         "backgroundColor": "#1B71F9"
       },
       "permissions": [
-        "android.permission.CAMERA"
+        "android.permission.CAMERA",
+        "android.permission.SEND_SMS"
       ],
       "blockedPermissions": [
         "android.permission.RECORD_AUDIO",
@@ -81,6 +82,13 @@
           "skAdNetworkItems": [
             "cstr6suwn9.skadnetwork"
           ]
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#1B71F9",
+          "defaultChannel": "sos"
         }
       ],
       "expo-font",

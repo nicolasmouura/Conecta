@@ -37,6 +37,7 @@ function semearConta() {
   firestore.__semear('convites/enviado', { deUid: 'u1' });
   firestore.__semear('convites/recebido', { paraEmail: 'ana@exemplo.com' });
   firestore.__semear('familiares/u1', { uid: 'u1' });
+  firestore.__semear('tokensPush/u1', { uid: 'u1', token: 'ExponentPushToken[abc]' });
   // De outras pessoas: não podem ser apagados.
   firestore.__semear('usuarios/u2', { nome: 'Bia' });
   firestore.__semear('alertasSOS/s2', { uid: 'u2' });

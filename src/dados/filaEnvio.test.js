@@ -5,6 +5,8 @@
 
 jest.mock('../config/firebase', () => ({ db: { nome: 'db' } }));
 
+jest.mock('./push', () => ({ notificarFamiliaSOS: jest.fn() }));
+
 jest.mock('firebase/firestore', () => {
   let proximoId = 0;
 
@@ -25,11 +27,13 @@ jest.mock('firebase/firestore', () => {
 let fila;
 let firestore;
 let banco;
+let push;
 
 beforeEach(() => {
   jest.resetModules();
 
   firestore = require('firebase/firestore');
+  push = require('./push');
   fila = require('./filaEnvio');
   ({ banco } = require('./bancoLocal'));
 
@@ -76,6 +80,39 @@ describe('enfileirar', () => {
       { caminho: `alertasSOS/${id}` },
       { latitude: 1, longitude: 2, uid: 'uid1', criadoEm: 'HORA_DO_SERVIDOR', status: 'ativo' }
     );
+  });
+
+  it('depois que o SOS chega ao Firebase, avisa a família com a notificação urgente', async () => {
+    const { id, confirmacao } = await fila.enfileirar('uid1', 'sos', { grupoId: 'g1', nome: 'Ana' });
+
+    await confirmacao;
+
+    expect(push.notificarFamiliaSOS).toHaveBeenCalledWith({
+      uid: 'uid1',
+      grupoId: 'g1',
+      nome: 'Ana',
+      alertaId: id,
+    });
+  });
+
+  it('sem internet o push só sai quando o SOS for entregue', async () => {
+    let entregar;
+    firestore.setDoc.mockImplementation(() => new Promise((resolver) => { entregar = resolver; }));
+
+    await fila.enfileirar('uid1', 'sos', { grupoId: 'g1', nome: 'Ana' });
+    await esperar();
+    expect(push.notificarFamiliaSOS).not.toHaveBeenCalled();
+
+    entregar();
+    await esperar();
+    expect(push.notificarFamiliaSOS).toHaveBeenCalledTimes(1);
+  });
+
+  it('só o SOS dispara o push', async () => {
+    await (await fila.enfileirar('uid1', 'encerrarSOS', { alertaId: 'sos1' })).confirmacao;
+    await (await fila.enfileirar('uid1', 'estouBem', { grupoId: 'g1' })).confirmacao;
+
+    expect(push.notificarFamiliaSOS).not.toHaveBeenCalled();
   });
 
   it('tira o item da fila depois que o servidor confirma', async () => {

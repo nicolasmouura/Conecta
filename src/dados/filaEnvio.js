@@ -15,6 +15,7 @@ import {
 
 import { db } from '../config/firebase';
 import { banco } from './bancoLocal';
+import { notificarFamiliaSOS } from './push';
 
 /*
  * Depois disso o item já não diz nada sobre agora e é descartado.
@@ -75,6 +76,13 @@ function enviar(uid, { tipo, dados, id, criadoEm }) {
         uid,
         criadoEm: serverTimestamp(),
         status: 'ativo',
+      }).then((resultado) => {
+        // O alerta chegou ao Firebase (na hora, ou quando a internet
+        // voltou): agora a família recebe também a notificação urgente.
+        // Sem esperar por ela (nunca lança).
+        notificarFamiliaSOS({ uid, grupoId: dados.grupoId, nome: dados.nome, alertaId: id });
+
+        return resultado;
       });
 
     case 'encerrarSOS':

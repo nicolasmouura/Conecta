@@ -86,6 +86,7 @@ export async function excluirConta(senha) {
   }
 
   lote.delete(doc(db, 'familiares', uid));
+  lote.delete(doc(db, 'tokensPush', uid));
 
   // Perfil, CPF e o índice do CPF juntos (o CPF fica livre de novo).
   if (perfil.exists()) {

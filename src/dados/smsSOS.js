@@ -100,6 +100,24 @@ export async function buscarTelefonesDaFamilia(grupoId, uidProprio) {
   }
 }
 
+/*
+ * Telefones para o SMS do SOS: a cópia do aparelho vale na hora (sem
+ * esperar a rede, que numa emergência sem internet custaria segundos) e
+ * a busca atualiza a cópia em segundo plano. Sem cópia, busca e espera.
+ */
+export async function telefonesParaSOS(grupoId, uidProprio) {
+  if (!grupoId) return [];
+
+  const copia = await lerLocal(`telefones:${grupoId}`);
+
+  if (Array.isArray(copia) && copia.length > 0) {
+    buscarTelefonesDaFamilia(grupoId, uidProprio);
+    return copia;
+  }
+
+  return buscarTelefonesDaFamilia(grupoId, uidProprio);
+}
+
 // Última posição guardada pelo sistema (não liga o GPS nem espera).
 export async function ultimaPosicaoDoAparelho() {
   try {
@@ -128,10 +146,14 @@ export async function enviarSOSPorSMS({ uid, grupoId, nome, posicao, posicaoEm }
   }
 
   const local = posicao ? { posicao, posicaoEm } : await ultimaPosicaoDoAparelho();
-  const telefones = await buscarTelefonesDaFamilia(grupoId, uid);
+  const telefones = await telefonesParaSOS(grupoId, uid);
   const mensagem = montarMensagemSOS({ nome, ...local });
 
-  await SMS.sendSMSAsync(telefones, mensagem);
+  // sendSMSAsync só termina quando a pessoa fecha o app de mensagens:
+  // não se espera por isso (o SOS segue em paralelo).
+  SMS.sendSMSAsync(telefones, mensagem).catch((erro) =>
+    console.log('App de mensagens não abriu:', erro.message)
+  );
 
   return { resultado: 'aberto', telefones: telefones.length };
 }

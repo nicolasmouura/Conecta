@@ -6,13 +6,23 @@
 import { Alert } from 'react-native';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 
-import SOSScreen from './SOSScreen';
-import { acionarSOS } from '../dados/sos';
+import SOSScreen, { resumoDaEmergencia } from './SOSScreen';
+import { acionarEmergencia } from '../dados/emergencia';
 import { enviarSOSPorSMS } from '../dados/smsSOS';
+import { pedirPermissaoSMS } from '../dados/smsAutomatico';
+import { ligarParaEmergencia } from '../dados/ligacao';
 
-jest.mock('../dados/sos', () => ({
-  ...jest.requireActual('../dados/sos'),
-  acionarSOS: jest.fn(),
+jest.mock('../dados/emergencia', () => ({
+  acionarEmergencia: jest.fn(),
+}));
+
+jest.mock('../dados/smsAutomatico', () => ({
+  pedirPermissaoSMS: jest.fn(),
+}));
+
+jest.mock('../dados/ligacao', () => ({
+  ...jest.requireActual('../dados/ligacao'),
+  ligarParaEmergencia: jest.fn(),
 }));
 
 jest.mock('../dados/smsSOS', () => ({
@@ -24,9 +34,14 @@ const firestore = require('firebase/firestore');
 
 const ANA = { uid: 'a', nome: 'Ana' };
 
+const SOS_ENVIADO = { id: 's1', jaExistia: false, comLocalizacao: true, enviado: true };
+const RESULTADO_OK = { sms: { resultado: 'aberto', enviados: 0, falhas: 0 }, sos: SOS_ENVIADO };
+
 beforeEach(() => {
   firestore.__limpar();
-  acionarSOS.mockResolvedValue({ id: 's1', jaExistia: false, comLocalizacao: true, enviado: true });
+  acionarEmergencia.mockResolvedValue(RESULTADO_OK);
+  pedirPermissaoSMS.mockResolvedValue(true);
+  ligarParaEmergencia.mockResolvedValue(true);
   enviarSOSPorSMS.mockResolvedValue({ resultado: 'aberto', telefones: 1 });
 
   jest.spyOn(Alert, 'alert').mockImplementation(() => {});
@@ -77,42 +92,30 @@ describe('SOSScreen', () => {
     await fireEvent.press(screen.getByText('ACIONAR SOS'));
 
     expect(ultimoAlerta()).toMatchObject({ titulo: 'Acionar SOS?', botoes: ['Cancelar', 'Acionar SOS'] });
-    expect(acionarSOS).not.toHaveBeenCalled();
+    expect(acionarEmergencia).not.toHaveBeenCalled();
   });
 
-  it('acionado com localização', async () => {
+  it('pede a permissão do SMS ao abrir', async () => {
     await abrir();
+
+    expect(pedirPermissaoSMS).toHaveBeenCalledTimes(1);
+  });
+
+  it('aciona SMS e alerta juntos, com a minha posição', async () => {
+    await abrir({ posicaoAtual: { latitude: 1, longitude: 2 }, posicaoEm: 123 });
 
     await acionar();
 
-    expect(acionarSOS).toHaveBeenCalledWith({ uid: 'a', grupoId: 'g1', nome: 'Ana' });
-    expect(ultimoAlerta()).toEqual({
-      titulo: 'SOS acionado',
-      mensagem: 'Sua família foi avisada com sua última localização.',
-      botoes: ['OK', 'Avisar por SMS'],
+    expect(acionarEmergencia).toHaveBeenCalledWith({
+      uid: 'a',
+      grupoId: 'g1',
+      nome: 'Ana',
+      posicao: { latitude: 1, longitude: 2 },
+      posicaoEm: 123,
     });
   });
 
-  it('acionado sem localização', async () => {
-    acionarSOS.mockResolvedValue({ id: 's1', jaExistia: false, comLocalizacao: false, enviado: true });
-    await abrir();
-
-    await acionar();
-
-    expect(ultimoAlerta().mensagem).toBe('Sua família foi avisada. Não havia localização disponível.');
-  });
-
-  it('sem internet: guardado para enviar depois', async () => {
-    acionarSOS.mockResolvedValue({ id: 's1', jaExistia: false, comLocalizacao: false, enviado: false });
-    await abrir();
-
-    await acionar();
-
-    expect(ultimoAlerta()).toMatchObject({ titulo: 'Sem internet', botoes: ['OK', 'Avisar por SMS'] });
-  });
-
-  it('SOS que já existia: nenhum aviso novo', async () => {
-    acionarSOS.mockResolvedValue({ id: 's1', jaExistia: true });
+  it('app de mensagens aberto e alerta registrado: nenhum aviso extra', async () => {
     await abrir();
 
     await acionar();
@@ -120,17 +123,68 @@ describe('SOSScreen', () => {
     expect(ultimoAlerta().titulo).toBe('Acionar SOS?');
   });
 
-  it('erro ao acionar oferece o SMS', async () => {
-    acionarSOS.mockRejectedValue(new Error('falhou'));
+  it('SMS automático enviado', async () => {
+    acionarEmergencia.mockResolvedValue({ sms: { resultado: 'automatico', enviados: 2, falhas: 0 }, sos: SOS_ENVIADO });
     await abrir();
 
     await acionar();
 
-    expect(ultimoAlerta()).toMatchObject({ titulo: 'Não foi possível acionar o SOS', botoes: ['OK', 'Avisar por SMS'] });
+    expect(ultimoAlerta()).toEqual({
+      titulo: 'SOS acionado',
+      mensagem: 'SMS enviado para 2 familiares.\nAlerta enviado no app.',
+      botoes: ['OK'],
+    });
+  });
 
-    const sms = Alert.alert.mock.calls.at(-1)[2].find((botao) => botao.text === 'Avisar por SMS');
-    await act(() => sms.onPress());
-    expect(enviarSOSPorSMS).toHaveBeenCalled();
+  it('erro inesperado ao acionar', async () => {
+    acionarEmergencia.mockRejectedValue(new Error('falhou'));
+    await abrir();
+
+    await acionar();
+
+    expect(ultimoAlerta()).toMatchObject({ titulo: 'Não foi possível acionar o SOS', botoes: ['OK'] });
+  });
+
+  it('destaca o 112: funciona sem internet e sem sinal da própria operadora', async () => {
+    await abrir();
+
+    expect(screen.getByText('PEDIR SOCORRO')).toBeOnTheScreen();
+    expect(screen.getByText('Liga para a emergência (112)')).toBeOnTheScreen();
+    expect(screen.getByText('Funciona sem internet e sem sinal da sua operadora, até sem chip')).toBeOnTheScreen();
+  });
+
+  it('os outros serviços dizem quando usar', async () => {
+    await abrir();
+
+    for (const uso of ['perigo, crime', 'saúde', 'fogo, resgate']) {
+      expect(screen.getByText(uso)).toBeOnTheScreen();
+    }
+  });
+
+  it('botões de ligar abrem o discador', async () => {
+    await abrir();
+
+    for (const numero of ['190', '192', '193', '112']) {
+      await fireEvent.press(screen.getByLabelText(new RegExp(`^Ligar ${numero}`)));
+      expect(ligarParaEmergencia).toHaveBeenLastCalledWith(numero);
+    }
+  });
+
+  it('discador que não abre orienta a discar', async () => {
+    ligarParaEmergencia.mockResolvedValue(false);
+    await abrir();
+
+    await fireEvent.press(screen.getByLabelText(/^Ligar 190/));
+
+    expect(ultimoAlerta()).toMatchObject({ titulo: 'Não foi possível ligar', mensagem: 'Disque 190 no seu telefone.' });
+  });
+
+  it('sem família: também dá para ligar', async () => {
+    await abrir({ grupoId: null });
+
+    await fireEvent.press(screen.getByLabelText(/^Ligar 112/));
+
+    expect(ligarParaEmergencia).toHaveBeenCalledWith('112');
   });
 
   it('o meu SOS ativo aparece no lugar do botão', async () => {
@@ -203,5 +257,57 @@ describe('SOSScreen', () => {
     await fireEvent.press(screen.getByText('Avisar por SMS'));
 
     expect(ultimoAlerta()).toMatchObject({ titulo: 'Não foi possível abrir as mensagens' });
+  });
+});
+
+describe('resumoDaEmergencia', () => {
+  const sms = (extra) => ({ resultado: 'automatico', enviados: 1, falhas: 0, ...extra });
+
+  it('um familiar, alerta enviado', () => {
+    expect(resumoDaEmergencia({ sms: sms(), sos: SOS_ENVIADO })).toEqual({
+      titulo: 'SOS acionado',
+      mensagem: 'SMS enviado para 1 familiar.\nAlerta enviado no app.',
+    });
+  });
+
+  it('sem internet: o alerta do app fica para depois', () => {
+    expect(resumoDaEmergencia({ sms: sms(), sos: { ...SOS_ENVIADO, enviado: false } }).mensagem).toBe(
+      'SMS enviado para 1 familiar.\nSem internet: o alerta no app sai quando a conexão voltar.'
+    );
+  });
+
+  it('SMS que não saiu para todos chama atenção', () => {
+    expect(resumoDaEmergencia({ sms: sms({ enviados: 2, falhas: 1 }), sos: SOS_ENVIADO })).toMatchObject({
+      titulo: 'Atenção',
+      mensagem: expect.stringContaining('Não saiu para 1.'),
+    });
+  });
+
+  it('sem nenhum SMS, manda ligar', () => {
+    for (const resultado of ['indisponivel', 'erro']) {
+      expect(resumoDaEmergencia({ sms: { resultado }, sos: SOS_ENVIADO })).toMatchObject({
+        titulo: 'Atenção',
+        mensagem: expect.stringContaining('Ligue para o 112'),
+      });
+    }
+  });
+
+  it('alerta do app recusado', () => {
+    expect(resumoDaEmergencia({ sms: sms(), sos: { erro: new Error('x') } })).toMatchObject({
+      titulo: 'Atenção',
+      mensagem: expect.stringContaining('O alerta no app não foi registrado.'),
+    });
+  });
+
+  it('SOS que já existia não repete o aviso do app', () => {
+    expect(resumoDaEmergencia({ sms: sms(), sos: { id: 's1', jaExistia: true } }).mensagem).toBe(
+      'SMS enviado para 1 familiar.'
+    );
+  });
+
+  it('sem família só há o SMS', () => {
+    expect(resumoDaEmergencia({ sms: sms({ enviados: 3 }), sos: null }).mensagem).toBe(
+      'SMS enviado para 3 familiares.'
+    );
   });
 });

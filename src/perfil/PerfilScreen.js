@@ -38,6 +38,7 @@ import {
 } from '../dados/salvarUsuario';
 import { gerarMiniatura } from '../dados/fotoPerfil';
 import { salvarLugar, TIPOS_LUGAR } from '../dados/lugares';
+import { removerPush } from '../dados/push';
 import {
   cores,
   fontes,
@@ -275,6 +276,12 @@ export default function PerfilScreen({
 
   async function sairDoAplicativo() {
     try {
+      // Antes do logout (depois, as regras recusam): este aparelho deixa
+      // de receber os SOS da família desta conta.
+      if (auth.currentUser) {
+        await removerPush(auth.currentUser.uid);
+      }
+
       await signOut(auth);
 
       console.log(

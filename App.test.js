@@ -13,6 +13,7 @@ import App from './App';
 import { ativarBiometria, biometriaAtiva, desativarBiometria } from './src/dados/biometria';
 import { processarFila } from './src/dados/filaEnvio';
 import { buscarTelefonesDaFamilia } from './src/dados/smsSOS';
+import { aoTocarNaNotificacao, registrarPush, removerPush } from './src/dados/push';
 import { garantirEntradaDiretorio } from './src/dados/salvarUsuario';
 import { apagarSenhaOffline } from './src/dados/senhaOffline';
 import { useCompartilharLocalizacao } from './src/mapa/compartilharLocalizacao';
@@ -32,6 +33,12 @@ jest.mock('./src/dados/biometria', () => ({
 }));
 jest.mock('./src/dados/filaEnvio', () => ({ processarFila: jest.fn() }));
 jest.mock('./src/dados/smsSOS', () => ({ buscarTelefonesDaFamilia: jest.fn() }));
+jest.mock('./src/dados/push', () => ({
+  aoTocarNaNotificacao: jest.fn(),
+  configurarNotificacoes: jest.fn(),
+  registrarPush: jest.fn(),
+  removerPush: jest.fn(),
+}));
 jest.mock('./src/dados/senhaOffline', () => ({ apagarSenhaOffline: jest.fn() }));
 jest.mock('./src/dados/salvarUsuario', () => ({ garantirEntradaDiretorio: jest.fn() }));
 jest.mock('./src/mapa/compartilharLocalizacao', () => ({ useCompartilharLocalizacao: jest.fn() }));
@@ -121,6 +128,9 @@ beforeEach(async () => {
   garantirEntradaDiretorio.mockResolvedValue();
   processarFila.mockResolvedValue();
   buscarTelefonesDaFamilia.mockResolvedValue([]);
+  registrarPush.mockResolvedValue({ registrado: true });
+  removerPush.mockResolvedValue();
+  aoTocarNaNotificacao.mockReturnValue(jest.fn());
   useCompartilharLocalizacao.mockReturnValue({ status: 'compartilhando', coordenadas: null });
   signOut.mockResolvedValue();
   onAuthStateChanged.mockImplementation((_auth, callback) => {
@@ -198,6 +208,34 @@ describe('App', () => {
       await abrir();
 
       expect(await local.lerLocal('sessao')).toEqual({ uid: 'u1', nome: 'Ana', email: 'ana@exemplo.com', grupoId: 'g1' });
+    });
+
+    it('com família: registra o aparelho para receber os SOS', async () => {
+      await abrir();
+
+      expect(registrarPush).toHaveBeenCalledWith({ uid: 'u1', grupoId: 'g1' });
+      expect(removerPush).not.toHaveBeenCalled();
+    });
+
+    it('sem família: o aparelho não recebe SOS', async () => {
+      firestore.__semear('usuarios/u1', { nome: 'Ana', email: 'ana@exemplo.com' });
+
+      await abrir();
+
+      expect(removerPush).toHaveBeenCalledWith('u1');
+      expect(registrarPush).not.toHaveBeenCalled();
+    });
+
+    it('tocar na notificação de SOS abre a tela de SOS', async () => {
+      await abrir();
+      expect(screen.getByText('Tela Menu')).toBeOnTheScreen();
+
+      await act(async () => {
+        aoTocarNaNotificacao.mock.calls.at(-1)[0]();
+        await esperar();
+      });
+
+      expect(screen.getByText('Tela SOS')).toBeOnTheScreen();
     });
 
     it('sem sessão: tela de entrada', async () => {
