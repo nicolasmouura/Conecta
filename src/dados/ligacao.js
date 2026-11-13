@@ -6,11 +6,12 @@
 import { Linking } from 'react-native';
 
 // O 112 vem primeiro: é o único que completa sem sinal da própria operadora.
+// "uso": quando ligar, em palavras que quem está em pânico entende.
 export const NUMEROS_EMERGENCIA = [
-  { numero: '112', nome: 'Emergência' },
-  { numero: '190', nome: 'Polícia' },
-  { numero: '192', nome: 'SAMU' },
-  { numero: '193', nome: 'Bombeiros' },
+  { numero: '112', nome: 'Emergência', uso: 'qualquer socorro' },
+  { numero: '190', nome: 'Polícia', uso: 'perigo, crime' },
+  { numero: '192', nome: 'SAMU', uso: 'saúde' },
+  { numero: '193', nome: 'Bombeiros', uso: 'fogo, resgate' },
 ];
 
 // true se o discador abriu.

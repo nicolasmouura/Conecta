@@ -148,8 +148,17 @@ describe('SOSScreen', () => {
   it('destaca o 112: funciona sem internet e sem sinal da própria operadora', async () => {
     await abrir();
 
+    expect(screen.getByText('PEDIR SOCORRO')).toBeOnTheScreen();
+    expect(screen.getByText('Liga para a emergência (112)')).toBeOnTheScreen();
     expect(screen.getByText('Funciona sem internet e sem sinal da sua operadora, até sem chip')).toBeOnTheScreen();
-    expect(screen.getByText(/SMS e internet precisam do sinal da sua operadora/)).toBeOnTheScreen();
+  });
+
+  it('os outros serviços dizem quando usar', async () => {
+    await abrir();
+
+    for (const uso of ['perigo, crime', 'saúde', 'fogo, resgate']) {
+      expect(screen.getByText(uso)).toBeOnTheScreen();
+    }
   });
 
   it('botões de ligar abrem o discador', async () => {

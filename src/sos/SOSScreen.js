@@ -139,9 +139,11 @@ function BotoesLigar() {
         accessibilityLabel={`Ligar ${principal.numero} ${principal.nome}`}
       >
         <View style={styles.botaoDestaqueTopo}>
-          <Feather name="phone-call" size={22} color={cores.textoSobrePrimaria} />
-          <Text style={styles.botaoDestaqueNumero}>{principal.numero}</Text>
+          <Feather name="phone-call" size={24} color={cores.textoSobrePrimaria} />
+          <Text style={styles.botaoDestaqueTitulo}>PEDIR SOCORRO</Text>
         </View>
+
+        <Text style={styles.botaoDestaqueNumero}>Liga para a emergência ({principal.numero})</Text>
 
         <Text style={styles.botaoDestaqueAviso}>
           Funciona sem internet e sem sinal da sua operadora, até sem chip
@@ -149,12 +151,11 @@ function BotoesLigar() {
       </TouchableOpacity>
 
       <Text style={styles.dicaSMS}>
-        O 112 usa qualquer rede de celular disponível. SMS e internet precisam
-        do sinal da sua operadora.
+        Escolha um serviço específico, se souber qual precisa:
       </Text>
 
       <View style={styles.ligarLinha}>
-        {outros.map(({ numero, nome }) => (
+        {outros.map(({ numero, nome, uso }) => (
           <TouchableOpacity
             key={numero}
             style={styles.botaoLigar}
@@ -162,9 +163,10 @@ function BotoesLigar() {
             accessibilityRole="button"
             accessibilityLabel={`Ligar ${numero} ${nome}`}
           >
-            <Feather name="phone" size={16} color={cores.textoSobrePrimaria} />
-            <Text style={styles.botaoLigarNumero}>{numero}</Text>
-            <Text style={styles.botaoLigarNome}>{nome}</Text>
+            <Text style={styles.botaoLigarNome}>
+              {nome} <Text style={styles.botaoLigarNumero}>{numero}</Text>
+            </Text>
+            <Text style={styles.botaoLigarUso}>{uso}</Text>
           </TouchableOpacity>
         ))}
       </View>
@@ -562,11 +564,17 @@ const styles = StyleSheet.create({
     gap: 10,
   },
 
-  botaoDestaqueNumero: {
-    fontSize: 28,
+  botaoDestaqueTitulo: {
+    fontSize: 24,
     fontFamily: fontes.titulo,
     color: cores.textoSobrePrimaria,
     letterSpacing: 1,
+  },
+
+  botaoDestaqueNumero: {
+    fontSize: 15,
+    fontFamily: fontes.destaque,
+    color: cores.textoSobrePrimaria,
   },
 
   botaoDestaqueAviso: {
@@ -584,25 +592,30 @@ const styles = StyleSheet.create({
 
   botaoLigar: {
     flexGrow: 1,
-    flexBasis: '45%',
-    flexDirection: 'row',
+    flexBasis: '28%',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 12,
-    borderRadius: raio.pilula,
-    backgroundColor: cores.erro,
-  },
-
-  botaoLigarNumero: {
-    fontSize: 16,
-    fontFamily: fontes.titulo,
-    color: cores.textoSobrePrimaria,
+    gap: 2,
+    paddingVertical: 10,
+    borderRadius: raio.card,
+    borderWidth: 1.5,
+    borderColor: cores.erro,
+    backgroundColor: cores.superficie,
   },
 
   botaoLigarNome: {
-    fontSize: 13,
-    color: cores.textoSobrePrimaria,
+    fontSize: 14,
+    fontFamily: fontes.destaque,
+    color: cores.erro,
+  },
+
+  botaoLigarNumero: {
+    fontFamily: fontes.titulo,
+  },
+
+  botaoLigarUso: {
+    fontSize: 11,
+    color: cores.textoSecundario,
   },
 
   dicaEncerrar: {
