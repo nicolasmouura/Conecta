@@ -62,6 +62,12 @@ import {
 } from './src/dados/armazenamentoLocal';
 import { processarFila } from './src/dados/filaEnvio';
 import { buscarTelefonesDaFamilia } from './src/dados/smsSOS';
+import {
+  aoTocarNaNotificacao,
+  configurarNotificacoes,
+  registrarPush,
+  removerPush,
+} from './src/dados/push';
 import GrupoScreen from './src/grupo/GrupoScreen';
 import { useCompartilharLocalizacao } from './src/mapa/compartilharLocalizacao';
 import { useVoltarAndroid } from './src/navegacao/voltar';
@@ -81,6 +87,9 @@ import { cores } from './src/theme/theme';
 // A folga evita pedir após diálogos rápidos do sistema (ex.: permissão
 // de localização no Android, que também coloca o app em segundo plano).
 const TOLERANCIA_SEGUNDO_PLANO = 10 * 1000;
+
+// Notificações do SOS aparecem mesmo com o app aberto.
+configurarNotificacoes();
 
 export default function App() {
   const [fontsLoaded] = useFonts({
@@ -259,6 +268,25 @@ export default function App() {
       processarFila(usuario.uid);
     }
   }, [usuario?.uid, emailOk]);
+
+  // Notificação urgente: este aparelho recebe os SOS da família atual
+  // (o token fica em tokensPush) e deixa de receber ao sair dela.
+  useEffect(() => {
+    if (!usuario?.uid || !emailOk || !perfil) return;
+
+    if (temGrupo && grupoId) {
+      registrarPush({ uid: usuario.uid, grupoId });
+    } else {
+      removerPush(usuario.uid);
+    }
+  }, [usuario?.uid, emailOk, perfil?.uid, temGrupo, grupoId]);
+
+  // Tocar na notificação de SOS abre a tela de SOS.
+  useEffect(() => {
+    if (!usuario?.uid) return undefined;
+
+    return aoTocarNaNotificacao(() => setTela('sos'));
+  }, [usuario?.uid]);
 
   // Só a PRIMEIRA emissão (sessão restaurada ao abrir) é tratada aqui:
   // com a biometria ligada, a sessão fica travada até ela ser confirmada;

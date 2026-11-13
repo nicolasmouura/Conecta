@@ -22,6 +22,18 @@ jest.mock('expo-location', () => ({
 }));
 jest.mock('expo-sms', () => ({ isAvailableAsync: async () => false, sendSMSAsync: async () => ({}) }));
 
+// Notificações (push.js): sem aparelho, sem Expo e sem o React Native.
+jest.mock('react-native', () => ({ Platform: { OS: 'android' } }));
+jest.mock('expo-constants', () => ({ expoConfig: { extra: { eas: { projectId: 'demo' } } } }));
+jest.mock('expo-notifications', () => ({
+  AndroidImportance: { MAX: 5 },
+  AndroidNotificationVisibility: { PUBLIC: 1 },
+  setNotificationChannelAsync: async () => null,
+  getPermissionsAsync: async () => ({ status: 'granted' }),
+  requestPermissionsAsync: async () => ({ status: 'granted' }),
+  getExpoPushTokenAsync: async () => ({ data: 'ExponentPushToken[teste]' }),
+}));
+
 const fs = require('fs');
 const path = require('path');
 const {
@@ -57,6 +69,7 @@ const estouBem = require('./src/dados/estouBem');
 const historico = require('./src/dados/historico');
 const fila = require('./src/dados/filaEnvio');
 const conta = require('./src/dados/conta');
+const push = require('./src/dados/push');
 const { observarConfigAnuncios } = require('./src/anuncios/regrasAnuncios');
 const { banco } = require('./src/dados/bancoLocal');
 const { apagarDadosLocais } = require('./src/dados/armazenamentoLocal');
@@ -648,6 +661,85 @@ describe('excluir a conta', () => {
     // O CPF ficou livre de novo.
     await cadastrar({ ...PESSOAS.caio, cpf: PESSOAS.ana.cpf });
     expect(await lerDireto('usuarios/caio')).toBeDefined();
+  });
+});
+
+describe('tokens de notificação (push)', () => {
+  const tokenValido = (grupoId, extra = {}) => ({
+    uid: 'ana',
+    grupoId,
+    token: 'ExponentPushToken[abc-123_X]',
+    plataforma: 'android',
+    atualizadoEm: firestore.serverTimestamp(),
+    ...extra,
+  });
+
+  it('o membro registra o aparelho e a família lê os tokens; quem é de fora, não', async () => {
+    const familia = await montarFamilia(PESSOAS.bia);
+    como(PESSOAS.ana);
+
+    expect(await push.registrarPush({ uid: 'ana', grupoId: familia.id })).toEqual({ registrado: true });
+    expect(await lerDireto('tokensPush/ana')).toMatchObject({
+      uid: 'ana',
+      grupoId: familia.id,
+      token: 'ExponentPushToken[teste]',
+      plataforma: 'android',
+    });
+
+    const daFamilia = (db) =>
+      getDocs(firestore.query(collection(db, 'tokensPush'), firestore.where('grupoId', '==', familia.id)));
+
+    expect((await daFamilia(como(PESSOAS.bia))).docs.map((d) => d.id)).toEqual(['ana']);
+
+    await cadastrar(PESSOAS.intruso);
+    await assertFails(daFamilia(como(PESSOAS.intruso)));
+  });
+
+  it('não dá para registrar token em nome de outra pessoa, de outra família ou malformado', async () => {
+    const familia = await montarFamilia(PESSOAS.bia);
+    const db = como(PESSOAS.ana);
+    const gravar = (caminho, dados) => setDoc(doc(db, caminho), dados);
+
+    await assertSucceeds(gravar('tokensPush/ana', tokenValido(familia.id)));
+
+    await assertFails(gravar('tokensPush/bia', tokenValido(familia.id)));
+    await assertFails(gravar('tokensPush/ana', tokenValido(familia.id, { uid: 'bia' })));
+    await assertFails(gravar('tokensPush/ana', tokenValido('outra-familia')));
+    await assertFails(gravar('tokensPush/ana', tokenValido(familia.id, { token: 'qualquer coisa' })));
+    await assertFails(gravar('tokensPush/ana', tokenValido(familia.id, { token: `ExponentPushToken[${'a'.repeat(250)}]` })));
+    await assertFails(gravar('tokensPush/ana', tokenValido(familia.id, { plataforma: 'web' })));
+    await assertFails(gravar('tokensPush/ana', tokenValido(familia.id, { atualizadoEm: Timestamp.fromMillis(1) })));
+    await assertFails(gravar('tokensPush/ana', tokenValido(familia.id, { extra: 'campo a mais' })));
+  });
+
+  it('sem família não há token', async () => {
+    await cadastrar(PESSOAS.ana);
+    const db = como(PESSOAS.ana);
+
+    await assertFails(setDoc(doc(db, 'tokensPush/ana'), tokenValido(null)));
+  });
+
+  it('só o dono apaga o token', async () => {
+    const familia = await montarFamilia(PESSOAS.bia);
+    como(PESSOAS.ana);
+    await push.registrarPush({ uid: 'ana', grupoId: familia.id });
+
+    await assertFails(firestore.deleteDoc(doc(como(PESSOAS.bia), 'tokensPush/ana')));
+    expect(await lerDireto('tokensPush/ana')).toBeDefined();
+
+    como(PESSOAS.ana);
+    await push.removerPush('ana');
+    expect(await lerDireto('tokensPush/ana')).toBeUndefined();
+  });
+
+  it('excluir a conta apaga o token', async () => {
+    const familia = await montarFamilia(PESSOAS.bia);
+    como(PESSOAS.ana);
+    await push.registrarPush({ uid: 'ana', grupoId: familia.id });
+
+    await conta.excluirConta('segredo');
+
+    expect(await lerDireto('tokensPush/ana')).toBeUndefined();
   });
 });
 

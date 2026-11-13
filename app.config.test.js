@@ -31,6 +31,30 @@ describe('app.config', () => {
     expect(config.android).toEqual(expo.android);
   });
 
+  it('com o google-services.json na raiz, liga o push no Android', () => {
+    const existe = jest.spyOn(require('fs'), 'existsSync').mockReturnValue(true);
+
+    const config = criarConfig({ config: expo });
+
+    expect(existe).toHaveBeenCalledWith(require('path').join(__dirname, 'google-services.json'));
+    expect(config.android.googleServicesFile).toBe('./google-services.json');
+
+    existe.mockRestore();
+  });
+
+  it('sem o google-services.json, o Android segue sem ele', () => {
+    jest.spyOn(require('fs'), 'existsSync').mockReturnValue(false);
+
+    expect(criarConfig({ config: expo }).android.googleServicesFile).toBeUndefined();
+
+    jest.restoreAllMocks();
+  });
+
+  it('notificações e SMS do SOS: plugin e permissão', () => {
+    expect(expo.plugins.find((plugin) => Array.isArray(plugin) && plugin[0] === 'expo-notifications')).toBeDefined();
+    expect(expo.android.permissions).toContain('android.permission.SEND_SMS');
+  });
+
   it('mantém o resto do app.json', () => {
     const config = criarConfig({ config: expo });
 

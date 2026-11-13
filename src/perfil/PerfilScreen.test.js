@@ -270,6 +270,18 @@ describe('PerfilScreen', () => {
     expect(onSair).toHaveBeenCalled();
   });
 
+  it('sair tira o token de notificação antes de encerrar a sessão', async () => {
+    firestore.__semear('tokensPush/u1', { uid: 'u1', token: 'ExponentPushToken[abc]' });
+    await abrir({ onSair: jest.fn() });
+
+    await fireEvent.press(screen.getByText('Sair (configurações)'));
+
+    expect(firestore.__ler('tokensPush/u1')).toBeUndefined();
+    expect(firestore.deleteDoc.mock.invocationCallOrder[0]).toBeLessThan(
+      authFirebase.signOut.mock.invocationCallOrder[0]
+    );
+  });
+
   it('erro ao sair', async () => {
     authFirebase.signOut.mockRejectedValue(new Error('falhou'));
     const onSair = jest.fn();
